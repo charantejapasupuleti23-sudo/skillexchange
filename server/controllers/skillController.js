@@ -1,12 +1,27 @@
 const Skill = require('../models/Skill');
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
+const initialSkills = require('../utils/initialSkills');
 
 // @desc    Get all skills with optional search & category filter
 // @route   GET /api/skills
 // @access  Public
 exports.getSkills = async (req, res, next) => {
   try {
+    const totalSkills = await Skill.countDocuments();
+    if (totalSkills === 0) {
+      await Skill.insertMany(initialSkills);
+    } else if (totalSkills < initialSkills.length) {
+      // Upsert any missing skills
+      for (const item of initialSkills) {
+        await Skill.findOneAndUpdate(
+          { name: item.name },
+          { $setOnInsert: item },
+          { upsert: true }
+        );
+      }
+    }
+
     const { category, search, sort = 'name' } = req.query;
     const query = {};
 

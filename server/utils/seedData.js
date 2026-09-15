@@ -14,143 +14,7 @@ const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const { connectDB } = require('../config/db');
 
-const initialSkills = [
-  // Programming
-  {
-    name: 'JavaScript',
-    category: 'Programming',
-    description: 'Modern ES6+ JavaScript, asynchronous programming, DOM manipulation, and full-stack development.',
-    icon: 'Code',
-    popularity: 45,
-  },
-  {
-    name: 'React',
-    category: 'Programming',
-    description: 'Component architecture, Hooks, State management, Context API, and modern React performance.',
-    icon: 'Atom',
-    popularity: 52,
-  },
-  {
-    name: 'Node.js',
-    category: 'Programming',
-    description: 'Server-side runtime, Express.js, RESTful microservices, authentication, and database connectivity.',
-    icon: 'Server',
-    popularity: 40,
-  },
-  {
-    name: 'Python',
-    category: 'Programming',
-    description: 'Python 3, scripting, data manipulation, automation, Flask, and Django web frameworks.',
-    icon: 'Terminal',
-    popularity: 48,
-  },
-  {
-    name: 'SQL & PostgreSQL',
-    category: 'Programming',
-    description: 'Relational database schema modeling, queries, indexing, transactions, and performance tuning.',
-    icon: 'Database',
-    popularity: 35,
-  },
-  {
-    name: 'Docker & DevOps',
-    category: 'Programming',
-    description: 'Containerization, multi-stage Dockerfiles, Docker Compose, and CI/CD automation.',
-    icon: 'Boxes',
-    popularity: 28,
-  },
-
-  // Design
-  {
-    name: 'UI/UX Design',
-    category: 'Design',
-    description: 'User research, wireframing, usability heuristics, interaction design, and design thinking.',
-    icon: 'Layout',
-    popularity: 42,
-  },
-  {
-    name: 'Figma',
-    category: 'Design',
-    description: 'Auto-layout, reusable design systems, component variants, and interactive prototyping.',
-    icon: 'Figma',
-    popularity: 44,
-  },
-  {
-    name: 'Photoshop',
-    category: 'Design',
-    description: 'Digital photo retouching, graphic composition, layer masking, and raster graphics.',
-    icon: 'Image',
-    popularity: 30,
-  },
-  {
-    name: 'Illustrator',
-    category: 'Design',
-    description: 'Vector artwork, branding identity, logo design, iconography, and typography illustration.',
-    icon: 'PenTool',
-    popularity: 26,
-  },
-
-  // Business
-  {
-    name: 'Public Speaking',
-    category: 'Business',
-    description: 'Speech structure, vocal modulation, stage presence, audience engagement, and overcoming stage fright.',
-    icon: 'Mic',
-    popularity: 32,
-  },
-  {
-    name: 'Entrepreneurship',
-    category: 'Business',
-    description: 'Validating startup concepts, customer discovery, unit economics, and pitching to investors.',
-    icon: 'TrendingUp',
-    popularity: 36,
-  },
-  {
-    name: 'Product Management',
-    category: 'Business',
-    description: 'Product roadmapping, user stories, prioritization frameworks, and cross-functional leadership.',
-    icon: 'Briefcase',
-    popularity: 33,
-  },
-
-  // Creative
-  {
-    name: 'Photography',
-    category: 'Creative',
-    description: 'Manual camera controls, exposure triangle, composition rules, portraiture, and natural lighting.',
-    icon: 'Camera',
-    popularity: 29,
-  },
-  {
-    name: 'Video Editing',
-    category: 'Creative',
-    description: 'Story pacing, color grading, audio synchronization, Premiere Pro, and DaVinci Resolve.',
-    icon: 'Video',
-    popularity: 34,
-  },
-  {
-    name: 'Music Production',
-    category: 'Creative',
-    description: 'Beat making, synth sound design, MIDI sequencing, mixing, and mastering in Ableton Live.',
-    icon: 'Music',
-    popularity: 25,
-  },
-
-  // Language
-  {
-    name: 'Spanish',
-    category: 'Language',
-    description: 'Conversational fluency, practical grammar, vocabulary immersion, and pronunciation.',
-    icon: 'Languages',
-    popularity: 31,
-  },
-  {
-    name: 'Japanese',
-    category: 'Language',
-    description: 'Hiragana, Katakana, everyday conversational phrases, and cultural nuances.',
-    icon: 'Languages',
-    popularity: 22,
-  },
-];
+const initialSkills = require('./initialSkills');
 
 const seedData = async () => {
   try {
@@ -217,7 +81,7 @@ const seedData = async () => {
             lastLearned: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
           },
           {
-            skill: skillMap['Docker & DevOps'],
+            skill: skillMap['Docker & Containerization'],
             level: 'Beginner',
             desiredOutcome: 'Set up multi-container local dev environments and build lean image pipelines.',
             progress: 20,
@@ -484,10 +348,15 @@ const seedData = async () => {
     const insertedUsers = await User.insertMany(usersData);
     console.log(`[Seed] Seeded ${insertedUsers.length} users successfully!`);
 
-    // Create a demo completed session and review between Alex Chen and Elena Rostova
+    // Demo users:
     const alex = insertedUsers[0];
     const elena = insertedUsers[1];
+    const marcus = insertedUsers[2];
+    const priya = insertedUsers[3];
+    const david = insertedUsers[4];
 
+    // 1. Connections
+    console.log('[Seed] Creating connections...');
     const demoConnection = await Connection.create({
       users: [alex._id, elena._id],
       sharedSkills: [skillMap['React'], skillMap['Python']],
@@ -495,6 +364,35 @@ const seedData = async () => {
       lastActivityAt: new Date(),
     });
 
+    const demoConnection2 = await Connection.create({
+      users: [marcus._id, david._id],
+      sharedSkills: [skillMap['Photography'], skillMap['Video Editing']],
+      status: 'active',
+      lastActivityAt: new Date(),
+    });
+
+    // 2. Exchange Requests
+    console.log('[Seed] Creating exchange requests...');
+    const request1 = await ExchangeRequest.create({
+      sender: priya._id,
+      receiver: alex._id,
+      teachSkill: skillMap['UI/UX Design'],
+      learnSkill: skillMap['JavaScript'],
+      message: 'Hi Alex! I saw your profile and would love to exchange my UI/UX Design knowledge for your JavaScript expertise.',
+      status: 'Pending',
+    });
+
+    const request2 = await ExchangeRequest.create({
+      sender: marcus._id,
+      receiver: alex._id,
+      teachSkill: skillMap['Photography'],
+      learnSkill: skillMap['React'],
+      message: 'Hey Alex, looking to learn React for a personal photography portfolio. Happy to teach composition and lighting in exchange!',
+      status: 'Pending',
+    });
+
+    // 3. Sessions (Past Completed & Upcoming Scheduled)
+    console.log('[Seed] Creating sessions...');
     const pastDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     const demoSession = await Session.create({
       connection: demoConnection._id,
@@ -511,6 +409,24 @@ const seedData = async () => {
       isReviewed: true,
     });
 
+    const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const upcomingSession = await Session.create({
+      connection: demoConnection._id,
+      teacher: elena._id,
+      learner: alex._id,
+      skill: skillMap['Python'],
+      date: futureDate,
+      startTime: '19:00',
+      endTime: '20:00',
+      meetingLink: 'https://meet.skillloop.dev/elena-alex-python',
+      notes: 'Introduction to Python FastAPI routers and dependency injection.',
+      status: 'Confirmed',
+      progressUpdated: false,
+      isReviewed: false,
+    });
+
+    // 4. Reviews
+    console.log('[Seed] Creating reviews...');
     await Review.create({
       session: demoSession._id,
       reviewer: elena._id,
@@ -520,16 +436,81 @@ const seedData = async () => {
       comment: 'Alex was an incredible mentor! He explained tricky React hook re-rendering concepts clearly with code examples.',
     });
 
+    // 5. Messages
+    console.log('[Seed] Creating messages...');
+    await Message.create({
+      conversation: demoConnection._id,
+      sender: alex._id,
+      receiver: elena._id,
+      text: 'Hi Elena! Great to connect with you. Looking forward to our React and Python exchange.',
+      read: true,
+      readAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    });
+
     await Message.create({
       conversation: demoConnection._id,
       sender: elena._id,
       receiver: alex._id,
       text: 'Thanks for the great session Alex! Looking forward to our next one on Python.',
       read: true,
-      readAt: new Date(),
+      readAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
     });
 
-    console.log('[Seed] Seed script completed successfully!');
+    await Message.create({
+      conversation: demoConnection._id,
+      sender: alex._id,
+      receiver: elena._id,
+      text: "Sounds great! I've prepped our session notes and setup the repo link.",
+      read: false,
+    });
+
+    // 6. Notifications
+    console.log('[Seed] Creating notifications...');
+    await Notification.create({
+      recipient: alex._id,
+      sender: priya._id,
+      type: 'exchange_request_received',
+      title: 'New Exchange Request',
+      message: 'Priya Sharma wants to exchange UI/UX Design for JavaScript.',
+      referenceId: request1._id,
+      referenceType: 'ExchangeRequest',
+      read: false,
+    });
+
+    await Notification.create({
+      recipient: alex._id,
+      sender: marcus._id,
+      type: 'exchange_request_received',
+      title: 'New Exchange Request',
+      message: 'Marcus Vance sent you a skill exchange request.',
+      referenceId: request2._id,
+      referenceType: 'ExchangeRequest',
+      read: false,
+    });
+
+    await Notification.create({
+      recipient: alex._id,
+      sender: elena._id,
+      type: 'new_review',
+      title: 'New Review Received',
+      message: 'Elena Rostova left you a 5-star review for React!',
+      referenceId: demoSession._id,
+      referenceType: 'Session',
+      read: true,
+    });
+
+    await Notification.create({
+      recipient: elena._id,
+      sender: alex._id,
+      type: 'session_scheduled',
+      title: 'Upcoming Session Scheduled',
+      message: 'Python session scheduled for in 3 days.',
+      referenceId: upcomingSession._id,
+      referenceType: 'Session',
+      read: false,
+    });
+
+    console.log('[Seed] All 8 collections populated successfully!');
     process.exit(0);
   } catch (err) {
     console.error('[Seed Error]', err);

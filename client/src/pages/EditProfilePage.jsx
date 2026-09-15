@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import SkillBadge from '../components/SkillBadge';
+import DropdownInput from '../components/DropdownInput';
 import {
   User,
   Briefcase,
@@ -30,6 +31,16 @@ const DAYS = [
   'Friday',
   'Saturday',
   'Sunday',
+];
+
+const FULL_NAME_OPTIONS = [
+  'Bhaskar Reddy',
+  'Alex Chen',
+  'Elena Rostova',
+  'Maya Lin',
+  'David Kim',
+  'Sarah Connor',
+  'Marcus Johnson',
 ];
 
 const OCCUPATION_OPTIONS = [
@@ -86,6 +97,31 @@ const EXPERIENCE_PRESETS = [
   'Director / Staff (12+ years)',
 ];
 
+const BIO_PRESETS = [
+  'Passionate full-stack developer eager to exchange knowledge, mentor peers, and learn cutting-edge web technology.',
+  'UI/UX designer and frontend engineer focused on creating elegant user experiences and modern design systems.',
+  'Backend enthusiast specializing in Node.js, distributed databases, cloud architecture, and microservices.',
+  'Computer science student looking to practice real-world coding, system design, and collaborate on projects.',
+];
+
+const GITHUB_PRESETS = [
+  'https://github.com/username',
+  'https://github.com/bhaskarreddy',
+  'https://github.com/developer',
+];
+
+const LINKEDIN_PRESETS = [
+  'https://linkedin.com/in/username',
+  'https://linkedin.com/in/bhaskarreddy',
+  'https://linkedin.com/in/developer',
+];
+
+const WEBSITE_PRESETS = [
+  'https://mywebsite.com',
+  'https://bhaskar.dev',
+  'https://portfolio.io',
+];
+
 const TIME_OPTIONS = [
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
   '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
@@ -101,6 +137,34 @@ const YEARS_OPTIONS = [
   { value: 5, label: '5 years' },
   { value: 7, label: '6 - 9 years' },
   { value: 10, label: '10+ years' },
+];
+
+const PROFICIENCY_OPTIONS = [
+  'Beginner',
+  'Intermediate',
+  'Advanced',
+  'Expert',
+];
+
+const LEARN_LEVEL_OPTIONS = [
+  { value: 'Beginner', label: 'Beginner (Fundamentals)' },
+  { value: 'Intermediate', label: 'Intermediate (Practical Application)' },
+  { value: 'Advanced', label: 'Advanced (Deep Dive & Architecture)' },
+  { value: 'Expert', label: 'Expert (Mastery)' },
+];
+
+const TEACH_DESC_PRESETS = [
+  'Components, Hooks, State management, Performance tuning',
+  'API design, Authentication, Database modeling, Microservices',
+  'Responsive layouts, CSS/Tailwind, Accessibility, Design tokens',
+  'Data structures, Algorithms, System design, Clean code',
+];
+
+const LEARN_GOAL_PRESETS = [
+  'Build end-to-end full stack web applications and prepare for tech interviews',
+  'Master advanced state management and high-performance frontend engineering',
+  'Gain deep understanding of database indexing, query optimization, and scalability',
+  'Design modern UI/UX interfaces with smooth micro-animations and accessibility',
 ];
 
 const EditProfilePage = () => {
@@ -183,6 +247,14 @@ const EditProfilePage = () => {
     acc[cat].push(skill);
     return acc;
   }, {});
+
+  const formattedGroupedSkills = Object.keys(groupedSkills).map((cat) => ({
+    category: cat,
+    items: groupedSkills[cat].map((s) => ({
+      value: s._id,
+      label: s.name,
+    })),
+  }));
 
   const handleAvatarFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -317,7 +389,6 @@ const EditProfilePage = () => {
 
     let updatedAvailability;
     if (daySchedule) {
-      // Add slot to existing day
       updatedAvailability = currentAvailability.map((item) => {
         if (item.day === availDay) {
           return {
@@ -328,7 +399,6 @@ const EditProfilePage = () => {
         return item;
       });
     } else {
-      // Add new day with slot
       updatedAvailability = [
         ...currentAvailability,
         {
@@ -415,7 +485,7 @@ const EditProfilePage = () => {
         </p>
       </div>
 
-      {/* Profile Photo Section - Upload Only */}
+      {/* Profile Photo Section */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-5">
         <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
           <Camera className="w-4 h-4 text-indigo-600" />
@@ -460,7 +530,7 @@ const EditProfilePage = () => {
         </div>
       </div>
 
-      {/* Personal & Professional Form - Single Input Boxes with Dropdown Suggestions */}
+      {/* Personal & Professional Form with Custom Dropdown Inputs */}
       <form
         onSubmit={handleSaveProfile}
         className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-5"
@@ -472,136 +542,89 @@ const EditProfilePage = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
           {/* Full Name */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Full Name:</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              required
-            />
-          </div>
-
-          {/* Occupation / Headline - Single Box with Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Occupation / Headline:</label>
-            <input
-              type="text"
-              list="occupation-list"
-              value={occupation}
-              onChange={(e) => setOccupation(e.target.value)}
-              placeholder="e.g. Full Stack Developer"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-            />
-            <datalist id="occupation-list">
-              {OCCUPATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} />
-              ))}
-            </datalist>
-          </div>
-
-          {/* Location - Single Box with Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Location:</label>
-            <input
-              type="text"
-              list="location-list"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. San Francisco, CA, USA"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-            />
-            <datalist id="location-list">
-              {LOCATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} />
-              ))}
-            </datalist>
-          </div>
-
-          {/* Education / Degree - Single Box with Dropdown */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Education / Degree:</label>
-            <input
-              type="text"
-              list="education-list"
-              value={education}
-              onChange={(e) => setEducation(e.target.value)}
-              placeholder="e.g. B.S. in Computer Science"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-            />
-            <datalist id="education-list">
-              {EDUCATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-
-        {/* Experience Summary - Single Box with Dropdown */}
-        <div>
-          <label className="block font-semibold text-slate-700 text-xs mb-1">
-            Experience Level & Summary:
-          </label>
-          <input
-            type="text"
-            list="experience-list"
-            value={experience}
-            onChange={(e) => setExperience(e.target.value)}
-            placeholder="e.g. Mid-Level Professional (3 - 5 years), React & Node.js specialist..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+          <DropdownInput
+            label="Full Name:"
+            value={name}
+            onChange={setName}
+            options={FULL_NAME_OPTIONS}
+            placeholder="e.g. Bhaskar Reddy"
+            required
           />
-          <datalist id="experience-list">
-            {EXPERIENCE_PRESETS.map((opt) => (
-              <option key={opt} value={opt} />
-            ))}
-          </datalist>
+
+          {/* Occupation / Headline */}
+          <DropdownInput
+            label="Occupation / Headline:"
+            value={occupation}
+            onChange={setOccupation}
+            options={OCCUPATION_OPTIONS}
+            placeholder="e.g. Full Stack Developer"
+          />
+
+          {/* Location */}
+          <DropdownInput
+            label="Location:"
+            value={location}
+            onChange={setLocation}
+            options={LOCATION_OPTIONS}
+            placeholder="e.g. San Francisco, CA, USA"
+          />
+
+          {/* Education / Degree */}
+          <DropdownInput
+            label="Education / Degree:"
+            value={education}
+            onChange={setEducation}
+            options={EDUCATION_OPTIONS}
+            placeholder="e.g. B.S. in Computer Science"
+          />
         </div>
+
+        {/* Experience Summary */}
+        <DropdownInput
+          label="Experience Level & Summary:"
+          value={experience}
+          onChange={setExperience}
+          options={EXPERIENCE_PRESETS}
+          placeholder="e.g. Mid-Level Professional (3 - 5 years), React & Node.js specialist..."
+        />
 
         {/* Bio */}
-        <div>
-          <label className="block font-semibold text-slate-700 text-xs mb-1">Bio:</label>
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            rows={3}
-            placeholder="Tell peers what you love teaching and what motivates your learning journey..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-          />
-        </div>
+        <DropdownInput
+          label="Bio:"
+          value={bio}
+          onChange={setBio}
+          options={BIO_PRESETS}
+          placeholder="Tell peers what you love teaching and what motivates your learning journey..."
+          isTextArea
+          rows={3}
+        />
 
         {/* Social Links */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-          <div>
-            <label className="block font-semibold text-slate-700 text-xs mb-1">GitHub URL:</label>
-            <input
-              type="url"
-              value={github}
-              onChange={(e) => setGithub(e.target.value)}
-              placeholder="https://github.com/username"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs"
-            />
-          </div>
-          <div>
-            <label className="block font-semibold text-slate-700 text-xs mb-1">LinkedIn URL:</label>
-            <input
-              type="url"
-              value={linkedin}
-              onChange={(e) => setLinkedin(e.target.value)}
-              placeholder="https://linkedin.com/in/username"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs"
-            />
-          </div>
-          <div>
-            <label className="block font-semibold text-slate-700 text-xs mb-1">Portfolio / Website:</label>
-            <input
-              type="url"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://mywebsite.com"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs"
-            />
-          </div>
+          <DropdownInput
+            label="GitHub URL:"
+            value={github}
+            onChange={setGithub}
+            options={GITHUB_PRESETS}
+            placeholder="https://github.com/username"
+            type="url"
+          />
+          <DropdownInput
+            label="LinkedIn URL:"
+            value={linkedin}
+            onChange={setLinkedin}
+            options={LINKEDIN_PRESETS}
+            placeholder="https://linkedin.com/in/username"
+            type="url"
+          />
+          <DropdownInput
+            label="Portfolio / Website:"
+            value={website}
+            onChange={setWebsite}
+            options={WEBSITE_PRESETS}
+            placeholder="https://mywebsite.com"
+            type="url"
+          />
         </div>
 
         <div className="flex justify-end pt-3">
@@ -665,68 +688,39 @@ const EditProfilePage = () => {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {/* Skill Selector */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Select Skill:</label>
-              <select
-                value={newTeachSkillId}
-                onChange={(e) => setNewTeachSkillId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                required
-              >
-                {Object.keys(groupedSkills).map((category) => (
-                  <optgroup key={category} label={category}>
-                    {groupedSkills[category].map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
+            <DropdownInput
+              label="Select Skill:"
+              value={newTeachSkillId}
+              onChange={setNewTeachSkillId}
+              options={formattedGroupedSkills}
+              required
+            />
 
             {/* Level Selector */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Proficiency Level:</label>
-              <select
-                value={newTeachLevel}
-                onChange={(e) => setNewTeachLevel(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              >
-                <option value="Beginner">Beginner</option>
-                <option value="Intermediate">Intermediate</option>
-                <option value="Advanced">Advanced</option>
-                <option value="Expert">Expert</option>
-              </select>
-            </div>
+            <DropdownInput
+              label="Proficiency Level:"
+              value={newTeachLevel}
+              onChange={setNewTeachLevel}
+              options={PROFICIENCY_OPTIONS}
+            />
 
             {/* Years of Experience */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Experience:</label>
-              <select
-                value={newTeachExp}
-                onChange={(e) => setNewTeachExp(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              >
-                {YEARS_OPTIONS.map((y) => (
-                  <option key={y.value} value={y.value}>
-                    {y.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 text-xs mb-1">Description / Key Topics:</label>
-            <input
-              type="text"
-              value={newTeachDesc}
-              onChange={(e) => setNewTeachDesc(e.target.value)}
-              placeholder="e.g. Components, Hooks, State management, Performance tuning..."
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+            <DropdownInput
+              label="Experience:"
+              value={newTeachExp}
+              onChange={(val) => setNewTeachExp(Number(val))}
+              options={YEARS_OPTIONS}
             />
           </div>
+
+          <DropdownInput
+            label="Description / Key Topics:"
+            value={newTeachDesc}
+            onChange={setNewTeachDesc}
+            options={TEACH_DESC_PRESETS}
+            placeholder="e.g. Components, Hooks, State management, Performance tuning..."
+          />
+
           <button
             type="submit"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs"
@@ -785,52 +779,31 @@ const EditProfilePage = () => {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             {/* Skill Selector */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Select Skill:</label>
-              <select
-                value={newLearnSkillId}
-                onChange={(e) => setNewLearnSkillId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                required
-              >
-                {Object.keys(groupedSkills).map((category) => (
-                  <optgroup key={category} label={category}>
-                    {groupedSkills[category].map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
+            <DropdownInput
+              label="Select Skill:"
+              value={newLearnSkillId}
+              onChange={setNewLearnSkillId}
+              options={formattedGroupedSkills}
+              required
+            />
 
             {/* Target Level */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Target Proficiency Level:</label>
-              <select
-                value={newLearnLevel}
-                onChange={(e) => setNewLearnLevel(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              >
-                <option value="Beginner">Beginner (Fundamentals)</option>
-                <option value="Intermediate">Intermediate (Practical Application)</option>
-                <option value="Advanced">Advanced (Deep Dive & Architecture)</option>
-                <option value="Expert">Expert (Mastery)</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 text-xs mb-1">Learning Goal / Desired Outcome:</label>
-            <input
-              type="text"
-              value={newLearnOutcome}
-              onChange={(e) => setNewLearnOutcome(e.target.value)}
-              placeholder="e.g. Build end-to-end full stack web applications and prepare for tech interviews..."
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+            <DropdownInput
+              label="Target Proficiency Level:"
+              value={newLearnLevel}
+              onChange={setNewLearnLevel}
+              options={LEARN_LEVEL_OPTIONS}
             />
           </div>
+
+          <DropdownInput
+            label="Learning Goal / Desired Outcome:"
+            value={newLearnOutcome}
+            onChange={setNewLearnOutcome}
+            options={LEARN_GOAL_PRESETS}
+            placeholder="e.g. Build end-to-end full stack web applications and prepare for tech interviews..."
+          />
+
           <button
             type="submit"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs"
@@ -892,52 +865,28 @@ const EditProfilePage = () => {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {/* Day Dropdown */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Day of Week:</label>
-              <select
-                value={availDay}
-                onChange={(e) => setAvailDay(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-              >
-                {DAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <DropdownInput
+              label="Day of Week:"
+              value={availDay}
+              onChange={setAvailDay}
+              options={DAYS}
+            />
 
             {/* Start Time Dropdown */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">Start Time:</label>
-              <select
-                value={availStartTime}
-                onChange={(e) => setAvailStartTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-              >
-                {TIME_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <DropdownInput
+              label="Start Time:"
+              value={availStartTime}
+              onChange={setAvailStartTime}
+              options={TIME_OPTIONS}
+            />
 
             {/* End Time Dropdown */}
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">End Time:</label>
-              <select
-                value={availEndTime}
-                onChange={(e) => setAvailEndTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-              >
-                {TIME_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <DropdownInput
+              label="End Time:"
+              value={availEndTime}
+              onChange={setAvailEndTime}
+              options={TIME_OPTIONS}
+            />
           </div>
 
           <button
@@ -962,27 +911,23 @@ const EditProfilePage = () => {
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Current Password:</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-              required
-            />
-          </div>
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">New Password:</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Minimum 6 characters"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-              required
-            />
-          </div>
+          <DropdownInput
+            label="Current Password:"
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            type="password"
+            required
+            options={[]}
+          />
+          <DropdownInput
+            label="New Password:"
+            value={newPassword}
+            onChange={setNewPassword}
+            type="password"
+            placeholder="Minimum 6 characters"
+            required
+            options={[]}
+          />
         </div>
 
         <div className="flex justify-end pt-2">

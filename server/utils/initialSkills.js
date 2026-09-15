@@ -1,0 +1,366 @@
+const initialSkills = [
+  // Programming & Web Frontend
+  {
+    name: 'JavaScript',
+    category: 'Programming',
+    description: 'Modern ES6+, async/await, DOM, browser APIs, and full-stack JS development.',
+    icon: 'Code',
+    popularity: 50,
+  },
+  {
+    name: 'TypeScript',
+    category: 'Programming',
+    description: 'Static typing, interfaces, generics, TypeScript compiler, and scalable web apps.',
+    icon: 'Code',
+    popularity: 48,
+  },
+  {
+    name: 'React',
+    category: 'Programming',
+    description: 'Component lifecycle, Hooks, State management, Context API, and modern React performance.',
+    icon: 'Atom',
+    popularity: 55,
+  },
+  {
+    name: 'Next.js',
+    category: 'Programming',
+    description: 'Server Components, SSR, SSG, App Router, dynamic routing, and full-stack React framework.',
+    icon: 'Layers',
+    popularity: 46,
+  },
+  {
+    name: 'Vue.js',
+    category: 'Programming',
+    description: 'Composition API, Vue Router, Pinia state management, and Vue 3 ecosystem.',
+    icon: 'Layout',
+    popularity: 40,
+  },
+  {
+    name: 'Angular',
+    category: 'Programming',
+    description: 'TypeScript-based framework, dependency injection, RxJS streams, and enterprise architecture.',
+    icon: 'Code',
+    popularity: 35,
+  },
+  {
+    name: 'HTML5 & CSS3 / Tailwind CSS',
+    category: 'Programming',
+    description: 'Semantic HTML, responsive CSS Grid/Flexbox, utility-first styling with Tailwind CSS.',
+    icon: 'Layout',
+    popularity: 45,
+  },
+  {
+    name: 'GraphQL & REST APIs',
+    category: 'Programming',
+    description: 'Schema design, Apollo Client/Server, queries, mutations, subscriptions, and API design.',
+    icon: 'Network',
+    popularity: 38,
+  },
+
+  // Programming & Backend Frameworks
+  {
+    name: 'Node.js & Express',
+    category: 'Programming',
+    description: 'Event loop, RESTful microservices, middleware, JWT auth, and database connectivity.',
+    icon: 'Server',
+    popularity: 49,
+  },
+  {
+    name: 'Python',
+    category: 'Programming',
+    description: 'Python 3, scripting, data manipulation, automation, Flask, and Django web frameworks.',
+    icon: 'Terminal',
+    popularity: 58,
+  },
+  {
+    name: 'Django & FastAPI',
+    category: 'Programming',
+    description: 'High-performance Python backend APIs, ORM, async endpoints, and authentication.',
+    icon: 'Server',
+    popularity: 42,
+  },
+  {
+    name: 'Java & Spring Boot',
+    category: 'Programming',
+    description: 'Enterprise Java, Spring Boot microservices, JPA/Hibernate, and design patterns.',
+    icon: 'Coffee',
+    popularity: 44,
+  },
+  {
+    name: 'C# & .NET Core',
+    category: 'Programming',
+    description: 'Modern C#, ASP.NET Core web APIs, Entity Framework, and cross-platform apps.',
+    icon: 'Code',
+    popularity: 37,
+  },
+  {
+    name: 'C / C++',
+    category: 'Programming',
+    description: 'Memory management, pointers, data structures, algorithms, and systems programming.',
+    icon: 'Cpu',
+    popularity: 39,
+  },
+  {
+    name: 'Go (Golang)',
+    category: 'Programming',
+    description: 'Goroutines, channels, concurrent microservices, and high-performance backend systems.',
+    icon: 'Zap',
+    popularity: 43,
+  },
+  {
+    name: 'Rust',
+    category: 'Programming',
+    description: 'Memory safety without garbage collection, borrow checker, async Rust, and systems programming.',
+    icon: 'Shield',
+    popularity: 41,
+  },
+  {
+    name: 'PHP & Laravel',
+    category: 'Programming',
+    description: 'Modern PHP 8+, Laravel MVC, Eloquent ORM, Blade templating, and REST APIs.',
+    icon: 'Code',
+    popularity: 34,
+  },
+
+  // Mobile App Development
+  {
+    name: 'React Native',
+    category: 'Programming',
+    description: 'Cross-platform iOS and Android mobile apps using React and native bridges.',
+    icon: 'Smartphone',
+    popularity: 42,
+  },
+  {
+    name: 'Flutter & Dart',
+    category: 'Programming',
+    description: 'Cross-platform mobile apps with Flutter widget tree, animations, and state management.',
+    icon: 'Smartphone',
+    popularity: 39,
+  },
+  {
+    name: 'Swift & iOS Development',
+    category: 'Programming',
+    description: 'Swift, SwiftUI, UIKit, Xcode, CoreData, and native iOS application architecture.',
+    icon: 'Smartphone',
+    popularity: 36,
+  },
+  {
+    name: 'Kotlin & Android Development',
+    category: 'Programming',
+    description: 'Modern Android with Kotlin, Jetpack Compose, Coroutines, and MVVM architecture.',
+    icon: 'Smartphone',
+    popularity: 35,
+  },
+
+  // Data & AI / Machine Learning
+  {
+    name: 'Machine Learning & Deep Learning',
+    category: 'Data & AI',
+    description: 'Supervised/unsupervised models, Neural Networks, scikit-learn, and model evaluation.',
+    icon: 'Brain',
+    popularity: 52,
+  },
+  {
+    name: 'PyTorch & TensorFlow',
+    category: 'Data & AI',
+    description: 'Deep learning frameworks, tensors, training loops, CNNs, Transformers, and GPU acceleration.',
+    icon: 'Cpu',
+    popularity: 46,
+  },
+  {
+    name: 'Data Analysis (Pandas & NumPy)',
+    category: 'Data & AI',
+    description: 'Data wrangling, exploratory data analysis, statistical modeling, and visualization.',
+    icon: 'BarChart',
+    popularity: 45,
+  },
+  {
+    name: 'Generative AI & LLMs (Prompting & RAG)',
+    category: 'Data & AI',
+    description: 'Large language models, LangChain, embeddings, vector databases, and fine-tuning.',
+    icon: 'Sparkles',
+    popularity: 56,
+  },
+
+  // Databases & Storage
+  {
+    name: 'SQL & PostgreSQL',
+    category: 'Programming',
+    description: 'Relational schema modeling, advanced queries, indexing, joins, and transactions.',
+    icon: 'Database',
+    popularity: 47,
+  },
+  {
+    name: 'MongoDB & NoSQL',
+    category: 'Programming',
+    description: 'Document-based data modeling, Mongoose schemas, aggregations, and horizontal scaling.',
+    icon: 'Database',
+    popularity: 43,
+  },
+  {
+    name: 'Redis & Caching',
+    category: 'Programming',
+    description: 'In-memory key-value data structures, pub/sub, caching strategies, and session stores.',
+    icon: 'Zap',
+    popularity: 37,
+  },
+
+  // Cloud, DevOps & Infrastructure
+  {
+    name: 'Docker & Containerization',
+    category: 'Programming',
+    description: 'Multi-stage Dockerfiles, Docker Compose, container networking, and volumes.',
+    icon: 'Boxes',
+    popularity: 48,
+  },
+  {
+    name: 'Kubernetes',
+    category: 'Programming',
+    description: 'Pods, Deployments, Services, Helm charts, Ingress, and cluster orchestration.',
+    icon: 'Boxes',
+    popularity: 41,
+  },
+  {
+    name: 'AWS (Amazon Web Services)',
+    category: 'Programming',
+    description: 'EC2, S3, Lambda serverless, IAM, DynamoDB, RDS, and cloud architecture.',
+    icon: 'Cloud',
+    popularity: 49,
+  },
+  {
+    name: 'CI/CD & GitHub Actions',
+    category: 'Programming',
+    description: 'Automated test workflows, build pipelines, release management, and deployment automation.',
+    icon: 'GitBranch',
+    popularity: 42,
+  },
+  {
+    name: 'Linux & Shell Scripting',
+    category: 'Programming',
+    description: 'Bash commands, process management, SSH, Cron, and server administration.',
+    icon: 'Terminal',
+    popularity: 40,
+  },
+
+  // Cybersecurity & CS Fundamentals
+  {
+    name: 'Cybersecurity & Ethical Hacking',
+    category: 'Programming',
+    description: 'Penetration testing, network security, authentication protocols, and vulnerability analysis.',
+    icon: 'Shield',
+    popularity: 41,
+  },
+  {
+    name: 'Data Structures & Algorithms (DSA)',
+    category: 'Programming',
+    description: 'Arrays, linked lists, trees, graphs, dynamic programming, sorting, and Big-O analysis.',
+    icon: 'Code',
+    popularity: 54,
+  },
+  {
+    name: 'System Design & Scalability',
+    category: 'Programming',
+    description: 'High-availability architectures, load balancers, database sharding, and CAP theorem.',
+    icon: 'Layers',
+    popularity: 51,
+  },
+  {
+    name: 'Git & Version Control',
+    category: 'Programming',
+    description: 'Branching strategies, interactive rebase, merge conflicts, pull requests, and Git workflows.',
+    icon: 'GitBranch',
+    popularity: 47,
+  },
+
+  // Design
+  {
+    name: 'UI/UX Design',
+    category: 'Design',
+    description: 'User research, wireframing, usability heuristics, interaction design, and design thinking.',
+    icon: 'Layout',
+    popularity: 46,
+  },
+  {
+    name: 'Figma',
+    category: 'Design',
+    description: 'Auto-layout, reusable design systems, component variants, and interactive prototyping.',
+    icon: 'Figma',
+    popularity: 50,
+  },
+  {
+    name: 'Photoshop',
+    category: 'Design',
+    description: 'Digital photo retouching, graphic composition, layer masking, and raster graphics.',
+    icon: 'Image',
+    popularity: 32,
+  },
+  {
+    name: 'Illustrator',
+    category: 'Design',
+    description: 'Vector artwork, branding identity, logo design, iconography, and typography illustration.',
+    icon: 'PenTool',
+    popularity: 30,
+  },
+
+  // Business & Product
+  {
+    name: 'Product Management',
+    category: 'Business',
+    description: 'Product roadmapping, user stories, prioritization frameworks, and agile leadership.',
+    icon: 'Briefcase',
+    popularity: 39,
+  },
+  {
+    name: 'Public Speaking',
+    category: 'Business',
+    description: 'Speech structure, vocal modulation, stage presence, and technical pitching.',
+    icon: 'Mic',
+    popularity: 31,
+  },
+  {
+    name: 'Entrepreneurship',
+    category: 'Business',
+    description: 'Validating startup concepts, customer discovery, unit economics, and pitch decks.',
+    icon: 'TrendingUp',
+    popularity: 35,
+  },
+
+  // Creative & Languages
+  {
+    name: 'Video Editing',
+    category: 'Creative',
+    description: 'Story pacing, color grading, audio synchronization, Premiere Pro, and DaVinci Resolve.',
+    icon: 'Video',
+    popularity: 36,
+  },
+  {
+    name: 'Photography',
+    category: 'Creative',
+    description: 'Manual camera controls, exposure triangle, composition rules, and studio lighting.',
+    icon: 'Camera',
+    popularity: 30,
+  },
+  {
+    name: 'Music Production',
+    category: 'Creative',
+    description: 'Beat making, synth sound design, MIDI sequencing, mixing, and mastering.',
+    icon: 'Music',
+    popularity: 28,
+  },
+  {
+    name: 'Spanish',
+    category: 'Language',
+    description: 'Conversational fluency, practical grammar, vocabulary immersion, and pronunciation.',
+    icon: 'Languages',
+    popularity: 28,
+  },
+  {
+    name: 'Japanese',
+    category: 'Language',
+    description: 'Hiragana, Katakana, conversational phrases, and cultural nuances.',
+    icon: 'Languages',
+    popularity: 25,
+  },
+];
+
+module.exports = initialSkills;
