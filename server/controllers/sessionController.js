@@ -330,14 +330,17 @@ exports.completeSession = async (req, res, next) => {
     session.progressUpdated = true;
     await session.save();
 
-    // Increment Teacher's completedSessions & learnersHelped
+    // Time-Banking: Teacher earns 1 credit, completedSessions & learnersHelped
     await User.findByIdAndUpdate(session.teacher, {
-      $inc: { completedSessions: 1, learnersHelped: 1 },
+      $inc: { timeCredits: 1, completedSessions: 1, learnersHelped: 1 },
     });
 
-    // Increment Learner's skill progress & completed sessions
+    // Time-Banking: Learner consumes 1 credit & increment skill progress
     const learner = await User.findById(session.learner);
     if (learner) {
+      if (learner.timeCredits > 0) {
+        learner.timeCredits = Math.max(0, learner.timeCredits - 1);
+      }
       const skillItem = learner.skillsToLearn.find(
         (item) => item.skill.toString() === session.skill.toString()
       );
@@ -346,8 +349,8 @@ exports.completeSession = async (req, res, next) => {
         skillItem.sessionsCompleted = (skillItem.sessionsCompleted || 0) + 1;
         skillItem.progress = Math.min(100, (skillItem.progress || 0) + 15);
         skillItem.lastLearned = new Date();
-        await learner.save();
       }
+      await learner.save();
     }
 
     const io = req.app.get('io');
@@ -359,14 +362,68 @@ exports.completeSession = async (req, res, next) => {
       sender: req.user.id,
       type: 'session_completed',
       title: 'Session Completed!',
-      message: `The session has been marked completed. You can now leave a review!`,
+      message: `The session has been marked completed. Teacher earned 1 time credit. You can now leave a review!`,
       referenceId: session._id,
       referenceType: 'Session',
     });
 
     res.status(200).json({
       success: true,
-      message: 'Session completed successfully',
+      message: 'Session completed successfully. Time credits and progress updated.',
+      data: session,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reschedule a session
+// @route   PUT /api/sessions/:id/reschedule
+// @access  Private
+exports.rescheduleSession = async (req, res, next) => {
+  try {
+    const { date, startTime, endTime } = req.body;
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return next(new ErrorResponse('Session not found', 404));
+    }
+
+    const isAuthorized =
+      session.teacher.toString() === req.user.id ||
+      session.learner.toString() === req.user.id;
+
+    if (!isAuthorized) {
+      return next(new ErrorResponse('Not authorized to reschedule this session', 403));
+    }
+
+    if (session.status === 'Completed' || session.status === 'Cancelled') {
+      return next(new ErrorResponse(`Cannot reschedule a session with status "${session.status}"`, 400));
+    }
+
+    if (date) session.date = new Date(date);
+    if (startTime) session.startTime = startTime;
+    if (endTime) session.endTime = endTime;
+    session.status = 'Rescheduled';
+    await session.save();
+
+    const otherUserId =
+      session.teacher.toString() === req.user.id ? session.learner : session.teacher;
+
+    const io = req.app.get('io');
+    await createNotification(io, {
+      recipient: otherUserId,
+      sender: req.user.id,
+      type: 'session_scheduled',
+      title: 'Session Rescheduled',
+      message: `${req.user.name} rescheduled the session to ${new Date(date || session.date).toLocaleDateString()} at ${startTime || session.startTime}.`,
+      referenceId: session._id,
+      referenceType: 'Session',
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Session rescheduled successfully',
       data: session,
     });
   } catch (error) {

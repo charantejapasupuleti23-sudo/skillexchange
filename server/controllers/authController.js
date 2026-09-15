@@ -113,6 +113,7 @@ exports.updateProfile = async (req, res, next) => {
       experience: req.body.experience,
       socialLinks: req.body.socialLinks,
       availability: req.body.availability,
+      profileImage: req.body.profileImage,
     };
 
     // Remove undefined fields
@@ -253,7 +254,7 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
-// @desc    Upload / update profile avatar via Cloudinary
+// @desc    Upload / update profile avatar (Cloudinary or Base64 Data URI)
 // @route   PUT /api/auth/avatar
 // @access  Private
 exports.uploadAvatar = async (req, res, next) => {
@@ -263,19 +264,42 @@ exports.uploadAvatar = async (req, res, next) => {
     }
 
     const user = await User.findById(req.user.id);
-
-    // Delete old avatar from Cloudinary if one exists
-    if (user.profileImage && user.profileImage.publicId) {
-      await deleteFromCloudinary(user.profileImage.publicId);
+    if (!user) {
+      return next(new ErrorResponse('User not found', 404));
     }
 
-    // Build a deterministic public_id so re-uploads overwrite cleanly
-    const publicId = `avatar_${req.user.id}`;
-    const result = await uploadToCloudinary(req.file.buffer, publicId);
+    let imageUrl = '';
+    let publicId = '';
+
+    const isCloudinaryConfigured =
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET;
+
+    if (isCloudinaryConfigured) {
+      // Delete old avatar from Cloudinary if one exists
+      if (user.profileImage && user.profileImage.publicId) {
+        await deleteFromCloudinary(user.profileImage.publicId);
+      }
+
+      const uploadPublicId = `avatar_${req.user.id}`;
+      const result = await uploadToCloudinary(req.file.buffer, uploadPublicId);
+      if (result && result.secure_url) {
+        imageUrl = result.secure_url;
+        publicId = result.public_id;
+      }
+    }
+
+    // Fallback: If Cloudinary is not configured or didn't return a URL, store as base64 data URI
+    if (!imageUrl) {
+      const base64Data = req.file.buffer.toString('base64');
+      imageUrl = `data:${req.file.mimetype};base64,${base64Data}`;
+      publicId = '';
+    }
 
     user.profileImage = {
-      url: result.secure_url,
-      publicId: result.public_id,
+      url: imageUrl,
+      publicId: publicId,
     };
     await user.save();
 

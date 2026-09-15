@@ -32,7 +32,7 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
         setSkillId(peerUser.skillsToTeach[0].skill?._id || peerUser.skillsToTeach[0].skill);
       }
 
-      setMeetingLink(`https://meet.skillloop.dev/session-${Math.random().toString(36).substring(2, 8)}`);
+      setMeetingLink(`https://meet.jit.si/skillloop-session-${Math.random().toString(36).substring(2, 10)}`);
     }
   }, [isOpen, connection, peerUser]);
 

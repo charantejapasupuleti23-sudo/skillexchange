@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useToast } from '../context/ToastContext';
 import ScheduleSessionModal from '../components/ScheduleSessionModal';
+import SkillBadge from '../components/SkillBadge';
 import EmptyState from '../components/EmptyState';
 import {
   Send,
@@ -14,6 +15,16 @@ import {
   CheckCheck,
   Check,
   Circle,
+  ArrowRightLeft,
+  ChevronRight,
+  ChevronLeft,
+  Star,
+  Award,
+  GraduationCap,
+  Clock,
+  User,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 
 const MessagesPage = () => {
@@ -31,6 +42,7 @@ const MessagesPage = () => {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [showBarterPanel, setShowBarterPanel] = useState(true);
 
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -192,7 +204,7 @@ const MessagesPage = () => {
     return (
       <div className="py-20 flex flex-col items-center justify-center">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="mt-2 text-xs text-slate-400 font-medium">Connecting to chat...</p>
+        <p className="mt-2 text-xs text-slate-400 font-medium">Connecting to live chat...</p>
       </div>
     );
   }
@@ -202,19 +214,21 @@ const MessagesPage = () => {
       <EmptyState
         icon={MessageSquare}
         title="No active conversations yet"
-        description="Connect with other users through skill exchange requests to start chatting and scheduling sessions."
+        description="Propose or accept a skill exchange request to unlock direct real-time messaging with peers."
         actionText="Discover Mentors"
         actionLink="/discover"
       />
     );
   }
 
+  const peer = selectedConnection?.peer;
+
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden h-[78vh] flex flex-col md:flex-row">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden h-[82vh] flex flex-col md:flex-row">
       {/* Sidebar: Conversation List */}
       <div className="w-full md:w-80 border-r border-slate-200 flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-bold text-slate-900 text-sm">Messages</h2>
+          <h2 className="font-bold text-slate-900 text-sm">Direct Messages</h2>
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
             {connections.length}
           </span>
@@ -222,9 +236,9 @@ const MessagesPage = () => {
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
           {connections.map((conn) => {
-            const peer = conn.peer;
+            const cPeer = conn.peer;
             const isSelected = selectedConnection?._id === conn._id;
-            const online = peer?._id && isUserOnline(peer._id);
+            const online = cPeer?._id && isUserOnline(cPeer._id);
 
             return (
               <button
@@ -235,10 +249,10 @@ const MessagesPage = () => {
                   isSelected ? 'bg-indigo-50/70 border-l-4 border-indigo-600' : 'hover:bg-slate-50'
                 }`}
               >
-                <div className="relative">
+                <div className="relative shrink-0">
                   <img
-                    src={peer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
-                    alt={peer?.name}
+                    src={cPeer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
+                    alt={cPeer?.name}
                     className="w-11 h-11 rounded-2xl object-cover ring-1 ring-slate-200"
                   />
                   <span
@@ -251,7 +265,7 @@ const MessagesPage = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-slate-900 text-xs truncate">
-                      {peer?.name}
+                      {cPeer?.name}
                     </p>
                     {conn.lastMessage && (
                       <span className="text-[10px] text-slate-400">
@@ -272,47 +286,69 @@ const MessagesPage = () => {
 
       {/* Main Chat Window */}
       {selectedConnection ? (
-        <div className="flex-1 flex flex-col bg-slate-50/30">
+        <div className="flex-1 flex flex-col min-w-0 bg-slate-50/30">
           {/* Top Bar */}
           <div className="px-5 py-3.5 bg-white border-b border-slate-200/80 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
                 <img
-                  src={selectedConnection.peer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
-                  alt={selectedConnection.peer?.name}
-                  className="w-10 h-10 rounded-xl object-cover"
+                  src={peer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
+                  alt={peer?.name}
+                  className="w-10 h-10 rounded-2xl object-cover"
                 />
                 <span
                   className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                    isUserOnline(selectedConnection.peer?._id)
+                    isUserOnline(peer?._id)
                       ? 'bg-emerald-500'
                       : 'bg-slate-300'
                   }`}
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <Link
-                  to={`/profile/${selectedConnection.peer?._id}`}
-                  className="font-bold text-slate-900 hover:text-indigo-600 text-xs sm:text-sm transition-colors"
+                  to={`/profile/${peer?._id}`}
+                  className="font-bold text-slate-900 hover:text-indigo-600 text-xs sm:text-sm transition-colors truncate block"
                 >
-                  {selectedConnection.peer?.name}
+                  {peer?.name}
                 </Link>
-                <p className="text-[11px] text-slate-400">
-                  {isUserOnline(selectedConnection.peer?._id) ? 'Online' : 'Offline'}
-                </p>
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className={isUserOnline(peer?._id) ? 'text-emerald-600 font-medium' : 'text-slate-400'}>
+                    {isUserOnline(peer?._id) ? 'Active now' : 'Offline'}
+                  </span>
+                  {peer?.rating && (
+                    <span className="text-amber-600 flex items-center gap-0.5 font-semibold">
+                      • <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {peer.rating.toFixed(1)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Schedule Session CTA */}
-            <button
-              type="button"
-              onClick={() => setIsScheduleModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors border border-indigo-200"
-            >
-              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Schedule Session</span>
-            </button>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsScheduleModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Schedule Session</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowBarterPanel((prev) => !prev)}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                title={showBarterPanel ? 'Hide Barter Details' : 'Show Barter Details'}
+              >
+                {showBarterPanel ? (
+                  <PanelRightClose className="w-4 h-4" />
+                ) : (
+                  <PanelRightOpen className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Messages Feed */}
@@ -324,7 +360,7 @@ const MessagesPage = () => {
             ) : messages.length === 0 ? (
               <div className="py-16 text-center text-xs text-slate-400 space-y-1">
                 <p className="font-semibold text-slate-600">No messages yet</p>
-                <p>Say hello to {selectedConnection.peer?.name} and arrange your learning session!</p>
+                <p>Say hello to {peer?.name} and arrange your skill exchange practice session!</p>
               </div>
             ) : (
               messages.map((msg) => {
@@ -375,7 +411,7 @@ const MessagesPage = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce delay-100" />
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce delay-200" />
-                <span className="ml-1">{selectedConnection.peer?.name} is typing...</span>
+                <span className="ml-1">{peer?.name} is typing...</span>
               </div>
             )}
 
@@ -391,7 +427,7 @@ const MessagesPage = () => {
               type="text"
               value={newMessageText}
               onChange={handleInputChange}
-              placeholder={`Message ${selectedConnection.peer?.name}...`}
+              placeholder={`Message ${peer?.name}...`}
               className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-800 text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
             />
             <button
@@ -409,15 +445,103 @@ const MessagesPage = () => {
         </div>
       )}
 
+      {/* Contextual Barter Panel (Collapsible Sidebar) */}
+      {selectedConnection && showBarterPanel && (
+        <div className="w-full md:w-72 border-l border-slate-200 bg-white flex flex-col shrink-0 p-5 space-y-5 overflow-y-auto">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Barter Context</span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowBarterPanel(false)}
+              className="text-slate-400 hover:text-slate-600 p-1"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Peer Quick Profile */}
+          <div className="text-center space-y-2">
+            <img
+              src={peer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
+              alt={peer?.name}
+              className="w-16 h-16 rounded-2xl object-cover mx-auto ring-2 ring-indigo-50 shadow-xs"
+            />
+            <div>
+              <h4 className="font-bold text-slate-900 text-sm">{peer?.name}</h4>
+              <p className="text-[11px] text-slate-400">{peer?.occupation || 'Member'}</p>
+            </div>
+            <Link
+              to={`/profile/${peer?._id}`}
+              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+            >
+              <User className="w-3 h-3" />
+              <span>View Full Profile</span>
+            </Link>
+          </div>
+
+          {/* Agreed Barter Skills */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 text-xs">
+            <div>
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-1.5">
+                They Teach You:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {peer?.skillsToTeach?.slice(0, 3).map((item, idx) => (
+                  <SkillBadge
+                    key={idx}
+                    skill={item.skill}
+                    level={item.level}
+                    variant="teach"
+                    size="sm"
+                  />
+                )) || <span className="text-slate-400 italic">None listed</span>}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold text-violet-700 uppercase tracking-wider block mb-1.5">
+                You Teach Them:
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {user?.skillsToTeach?.slice(0, 3).map((item, idx) => (
+                  <SkillBadge
+                    key={idx}
+                    skill={item.skill}
+                    level={item.level}
+                    variant="learn"
+                    size="sm"
+                  />
+                )) || <span className="text-slate-400 italic">None listed</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Schedule Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setIsScheduleModalOpen(true)}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Schedule Live Session</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Schedule Session Modal */}
       {selectedConnection && (
         <ScheduleSessionModal
           isOpen={isScheduleModalOpen}
           onClose={() => setIsScheduleModalOpen(false)}
           connection={selectedConnection}
-          peerUser={selectedConnection.peer}
+          peerUser={peer}
           onSuccess={() => {
-            addToast('Session scheduled! Check the Sessions tab.', 'success');
+            addToast('Session scheduled! View in Sessions tab.', 'success');
           }}
         />
       )}

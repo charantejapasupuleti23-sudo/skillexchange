@@ -26,49 +26,73 @@ exports.getUsers = async (req, res, next) => {
       query._id = { $ne: req.user.id };
     }
 
-    // General text search
-    if (search) {
-      const searchRegex = { $regex: search, $options: 'i' };
+    // General text search including skills
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      // Also find matching skills by name
+      const skillMatches = await Skill.find({
+        $or: [{ name: searchRegex }, { category: searchRegex }, { description: searchRegex }],
+      }).select('_id');
+      const matchedSkillIds = skillMatches.map((s) => s._id);
+
       query.$or = [
         { name: searchRegex },
         { username: searchRegex },
         { bio: searchRegex },
         { occupation: searchRegex },
         { location: searchRegex },
+        { education: searchRegex },
+        ...(matchedSkillIds.length > 0
+          ? [
+              { 'skillsToTeach.skill': { $in: matchedSkillIds } },
+              { 'skillsToLearn.skill': { $in: matchedSkillIds } },
+            ]
+          : []),
       ];
     }
 
     // Filter by location
-    if (location) {
-      query.location = { $regex: location, $options: 'i' };
+    if (location && location.trim() && location !== 'All') {
+      query.location = { $regex: location.trim(), $options: 'i' };
     }
 
     // Filter by minimum rating
-    if (rating) {
+    if (rating && Number(rating) > 0) {
       query.rating = { $gte: parseFloat(rating) };
     }
 
-    // Filter by skill or skill category
-    if (skill || category) {
+    // Filter by skill name or multi-select categories or proficiency level
+    if (skill || category || (level && level !== 'All')) {
       const skillQuery = {};
-      if (skill) {
-        skillQuery.name = { $regex: skill, $options: 'i' };
+      if (skill && skill.trim()) {
+        skillQuery.name = { $regex: skill.trim(), $options: 'i' };
       }
+
       if (category && category !== 'All') {
-        skillQuery.category = category;
+        const categories = Array.isArray(category)
+          ? category
+          : category.split(',').map((c) => c.trim()).filter(Boolean);
+        if (categories.length > 0) {
+          skillQuery.category = { $in: categories };
+        }
       }
 
-      const matchingSkills = await Skill.find(skillQuery).select('_id');
-      const skillIds = matchingSkills.map((s) => s._id);
+      // If category or skill name filter applied, get IDs
+      if (Object.keys(skillQuery).length > 0) {
+        const matchingSkills = await Skill.find(skillQuery).select('_id');
+        const skillIds = matchingSkills.map((s) => s._id);
 
-      const teachCondition = {
-        skill: { $in: skillIds },
-      };
-      if (level && level !== 'All') {
-        teachCondition.level = level;
+        const teachCondition = {
+          skill: { $in: skillIds },
+        };
+        if (level && level !== 'All') {
+          teachCondition.level = level;
+        }
+
+        query.skillsToTeach = { $elemMatch: teachCondition };
+      } else if (level && level !== 'All') {
+        query.skillsToTeach = { $elemMatch: { level } };
       }
-
-      query.skillsToTeach = { $elemMatch: teachCondition };
     }
 
     // Pagination

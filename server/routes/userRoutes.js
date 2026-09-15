@@ -10,9 +10,9 @@ const {
   updateAvailability,
   updateLearningProgress,
 } = require('../controllers/userController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
 
-router.get('/', getUsers);
+router.get('/', optionalAuth, getUsers);
 
 // Specific static sub-routes must be registered BEFORE the dynamic /:id route
 // to prevent Express matching e.g. GET /skills/teach as id="skills"
