@@ -25,6 +25,26 @@ const teachSkillSchema = new mongoose.Schema(
       maxlength: 300,
       default: '',
     },
+    endorsements: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+        },
+        comment: {
+          type: String,
+          default: '',
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    endorsementsCount: {
+      type: Number,
+      default: 0,
+    },
   },
   { _id: false }
 );
@@ -214,6 +234,51 @@ const userSchema = new mongoose.Schema(
       default: 5,
       min: 0,
     },
+    escrowCredits: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    streak: {
+      current: {
+        type: Number,
+        default: 1,
+      },
+      longest: {
+        type: Number,
+        default: 1,
+      },
+      lastActiveDate: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+    badges: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        icon: { type: String, default: '🏆' },
+        description: { type: String, default: '' },
+        earnedAt: { type: Date, default: Date.now },
+      },
+    ],
+    milestones: [
+      {
+        id: { type: String, required: true },
+        title: { type: String, required: true },
+        category: { type: String, default: 'general' },
+        completed: { type: Boolean, default: false },
+        completedAt: { type: Date },
+      },
+    ],
+    roadmapsProgress: [
+      {
+        roadmapId: { type: String, required: true },
+        completedTopics: [{ type: String }],
+        progress: { type: Number, default: 0 },
+        lastUpdated: { type: Date, default: Date.now },
+      },
+    ],
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },

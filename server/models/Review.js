@@ -37,13 +37,23 @@ const reviewSchema = new mongoose.Schema(
       trim: true,
       maxlength: [1000, 'Review comment cannot exceed 1000 characters'],
     },
+    endorsedSkill: {
+      type: Boolean,
+      default: true,
+    },
+    tags: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
   },
   {
     timestamps: true,
   }
 );
 
-// Static method to recalculate average rating for a reviewed user
+// Static method to recalculate average rating and endorsements for a reviewed user
 reviewSchema.statics.calculateAverageRating = async function (userId) {
   const stats = await this.aggregate([
     {

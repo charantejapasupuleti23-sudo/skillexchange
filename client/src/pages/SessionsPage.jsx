@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReviewModal from '../components/ReviewModal';
 import Modal from '../components/Modal';
+import SessionWorkspaceModal from '../components/SessionWorkspaceModal';
 import SkillBadge from '../components/SkillBadge';
 import EmptyState from '../components/EmptyState';
 import {
@@ -22,6 +23,9 @@ import {
   ArrowRightLeft,
   CalendarCheck,
   RefreshCw,
+  Code,
+  FileText,
+  Laptop,
 } from 'lucide-react';
 
 const SessionsPage = () => {
@@ -36,6 +40,10 @@ const SessionsPage = () => {
   // Review Modal state
   const [reviewingSession, setReviewingSession] = useState(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
+  // Workspace Modal state
+  const [activeWorkspaceSession, setActiveWorkspaceSession] = useState(null);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
 
   // Reschedule Modal state
   const [reschedulingSession, setReschedulingSession] = useState(null);
@@ -351,6 +359,19 @@ const SessionsPage = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Live Workspace Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveWorkspaceSession(session);
+                        setIsWorkspaceOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors"
+                    >
+                      <Code className="w-3.5 h-3.5" />
+                      <span>Live Workspace</span>
+                    </button>
+
                     {/* Pending Actions */}
                     {session.status === 'Pending' && (
                       <>
@@ -505,6 +526,21 @@ const SessionsPage = () => {
         session={reviewingSession}
         onSuccess={() => {
           fetchSessions();
+        }}
+      />
+
+      {/* Session Workspace Modal */}
+      <SessionWorkspaceModal
+        isOpen={isWorkspaceOpen}
+        onClose={() => setIsWorkspaceOpen(false)}
+        session={activeWorkspaceSession}
+        onSessionUpdated={(updated) => {
+          setActiveWorkspaceSession(updated);
+          fetchSessions();
+        }}
+        onOpenReview={(sess) => {
+          setReviewingSession(sess);
+          setIsReviewModalOpen(true);
         }}
       />
     </div>

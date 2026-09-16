@@ -5,7 +5,6 @@ const sessionSchema = new mongoose.Schema(
     connection: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Connection',
-      required: [true, 'Connection reference is required'],
       index: true,
     },
     teacher: {
@@ -56,6 +55,51 @@ const sessionSchema = new mongoose.Schema(
       default: 'Pending',
       index: true,
     },
+    // Escrow & Time-Banking Wallet
+    creditCost: {
+      type: Number,
+      default: 1,
+      min: 0,
+    },
+    escrowStatus: {
+      type: String,
+      enum: ['held', 'released', 'refunded'],
+      default: 'held',
+    },
+    // Mutual Completion & Check-in
+    confirmedByTeacher: {
+      type: Boolean,
+      default: false,
+    },
+    confirmedByLearner: {
+      type: Boolean,
+      default: false,
+    },
+    teacherCheckedInAt: {
+      type: Date,
+    },
+    learnerCheckedInAt: {
+      type: Date,
+    },
+    // Integrated Session Workspace & Scratchpad
+    workspaceNotes: {
+      type: String,
+      default: '',
+      maxlength: [10000, 'Workspace notes cannot exceed 10000 characters'],
+    },
+    workspaceCode: {
+      type: String,
+      default: '// Write or collaborate on code here during your session\nfunction solveProblem() {\n  return "SkillLoop Collaborative Session";\n}',
+    },
+    workspaceLanguage: {
+      type: String,
+      default: 'javascript',
+    },
+    // Booking Slot Reference
+    availabilitySlot: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Availability',
+    },
     progressUpdated: {
       type: Boolean,
       default: false,
@@ -63,6 +107,10 @@ const sessionSchema = new mongoose.Schema(
     isReviewed: {
       type: Boolean,
       default: false,
+    },
+    endorsedSkill: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Skill',
     },
   },
   {

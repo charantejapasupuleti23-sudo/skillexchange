@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import SkillBadge from '../components/SkillBadge';
 import MatchScore from '../components/MatchScore';
 import SendRequestModal from '../components/SendRequestModal';
+import BookSessionModal from '../components/BookSessionModal';
 import {
   Star,
   MapPin,
@@ -20,6 +21,9 @@ import {
   Edit,
   ArrowRight,
   Loader2,
+  ShieldCheck,
+  Flame,
+  Coins,
 } from 'lucide-react';
 
 const ProfilePage = () => {
@@ -30,6 +34,7 @@ const ProfilePage = () => {
   const [matchData, setMatchData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isBookModalOpen, setIsBookModalOpen] = useState(false);
 
   const targetId = id || currentUser?._id;
   const isOwnProfile = currentUser && (currentUser._id === targetId || currentUser.id === targetId);
@@ -161,14 +166,25 @@ const ProfilePage = () => {
             ) : (
               <div className="flex flex-col items-center sm:items-end gap-2">
                 {matchData && <MatchScore score={matchData.matchScore} />}
-                <button
-                  type="button"
-                  onClick={() => setIsRequestModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-200 transition-all hover:scale-102"
-                >
-                  <span>Propose Skill Exchange</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBookModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-200 transition-all hover:scale-102"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Book Session (1 Credit)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsRequestModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-200 transition-all hover:scale-102"
+                  >
+                    <span>Propose Barter</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -214,12 +230,20 @@ const ProfilePage = () => {
           <div className="space-y-3">
             {profileUser.skillsToTeach && profileUser.skillsToTeach.length > 0 ? (
               profileUser.skillsToTeach.map((item, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900 text-xs sm:text-sm">
+                <div key={idx} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-1.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-bold text-slate-900 text-xs sm:text-sm">
                       {item.skill?.name}
                     </span>
-                    <SkillBadge skill={item.skill?.name} level={item.level} size="sm" />
+                    <div className="flex items-center gap-1.5">
+                      {item.endorsementsCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>{item.endorsementsCount} Verified Endorsement{item.endorsementsCount > 1 ? 's' : ''}</span>
+                        </span>
+                      )}
+                      <SkillBadge skill={item.skill?.name} level={item.level} size="sm" />
+                    </div>
                   </div>
                   {item.yearsOfExperience && (
                     <p className="text-[11px] text-slate-500 font-medium">
@@ -378,6 +402,13 @@ const ProfilePage = () => {
         isOpen={isRequestModalOpen}
         onClose={() => setIsRequestModalOpen(false)}
         targetUser={profileUser}
+      />
+
+      {/* Book Session Modal */}
+      <BookSessionModal
+        isOpen={isBookModalOpen}
+        onClose={() => setIsBookModalOpen(false)}
+        mentor={profileUser}
       />
     </div>
   );

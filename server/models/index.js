@@ -6,6 +6,9 @@ const Session = require('./Session');
 const Message = require('./Message');
 const Review = require('./Review');
 const Notification = require('./Notification');
+const Availability = require('./Availability');
+const CreditTransaction = require('./CreditTransaction');
+const Workshop = require('./Workshop');
 
 module.exports = {
   User,
@@ -16,4 +19,7 @@ module.exports = {
   Message,
   Review,
   Notification,
+  Availability,
+  CreditTransaction,
+  Workshop,
 };

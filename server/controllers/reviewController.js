@@ -3,13 +3,14 @@ const Session = require('../models/Session');
 const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
 const { createNotification } = require('../utils/notify');
+const { evaluateUserBadges } = require('../utils/gamification');
 
-// @desc    Create a review for a completed session
+// @desc    Create a review & skill endorsement for a completed session
 // @route   POST /api/reviews
 // @access  Private
 exports.createReview = async (req, res, next) => {
   try {
-    const { sessionId, rating, comment } = req.body;
+    const { sessionId, rating, comment, endorseSkill = true, tags = [] } = req.body;
 
     if (!sessionId || !rating || !comment) {
       return next(new ErrorResponse('Please provide sessionId, rating (1-5), and comment', 400));
@@ -48,11 +49,42 @@ exports.createReview = async (req, res, next) => {
       skill: session.skill._id,
       rating: Number(rating),
       comment: comment.trim(),
+      endorsedSkill: !!endorseSkill,
+      tags: Array.isArray(tags) ? tags : [],
     });
 
     // Mark session as reviewed
     session.isReviewed = true;
+    if (endorseSkill) {
+      session.endorsedSkill = session.skill._id;
+    }
     await session.save();
+
+    // If endorsed, add endorsement entry directly to mentor's taught skills
+    if (endorseSkill) {
+      const mentor = await User.findById(session.teacher);
+      if (mentor) {
+        const taughtSkill = mentor.skillsToTeach.find(
+          (item) => item.skill.toString() === session.skill._id.toString()
+        );
+        if (taughtSkill) {
+          taughtSkill.endorsements = taughtSkill.endorsements || [];
+          taughtSkill.endorsements.push({
+            user: req.user.id,
+            comment: comment.trim().substring(0, 200),
+            createdAt: new Date(),
+          });
+          taughtSkill.endorsementsCount = (taughtSkill.endorsementsCount || 0) + 1;
+          await mentor.save();
+        }
+      }
+    }
+
+    // Check and award any earned badges
+    await Promise.all([
+      evaluateUserBadges(session.teacher),
+      evaluateUserBadges(req.user.id),
+    ]);
 
     // Notify teacher
     const io = req.app.get('io');
@@ -60,8 +92,8 @@ exports.createReview = async (req, res, next) => {
       recipient: session.teacher,
       sender: req.user.id,
       type: 'new_review',
-      title: 'New Review Received!',
-      message: `${req.user.name} left a ${rating}-star review for your ${session.skill.name} session: "${comment.length > 50 ? comment.substring(0, 47) + '...' : comment}"`,
+      title: 'New Review & Skill Endorsement Received!',
+      message: `${req.user.name} left a ${rating}-star review and verified your ${session.skill.name} skill: "${comment.length > 50 ? comment.substring(0, 47) + '...' : comment}"`,
       referenceId: review._id,
       referenceType: 'Review',
     });
@@ -72,7 +104,7 @@ exports.createReview = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Review submitted successfully',
+      message: 'Review and skill endorsement submitted successfully',
       data: populatedReview,
     });
   } catch (error) {

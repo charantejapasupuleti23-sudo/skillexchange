@@ -16,6 +16,10 @@ import {
   Layers,
   Check,
   ChevronDown,
+  Coins,
+  Users,
+  GraduationCap,
+  Flame,
 } from 'lucide-react';
 
 const Navbar = () => {
@@ -92,6 +96,8 @@ const Navbar = () => {
   const navLinks = [
     { name: 'Discover', path: '/discover', icon: Compass },
     { name: 'Matches', path: '/matches', icon: Sparkles },
+    { name: 'Workshops', path: '/workshops', icon: Users },
+    { name: 'Roadmaps', path: '/learn', icon: GraduationCap },
     { name: 'Messages', path: '/messages', icon: MessageSquare },
     { name: 'Sessions', path: '/sessions', icon: Calendar },
   ];
@@ -121,7 +127,7 @@ const Navbar = () => {
                     <Link
                       key={item.name}
                       to={item.path}
-                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                         isActive
                           ? 'bg-indigo-50 text-indigo-700 font-semibold'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
@@ -136,10 +142,20 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Right Header: Notifications & Profile / Auth Buttons */}
-          <div className="flex items-center gap-3">
+          {/* Right Header: Notifications, Wallet Pill & Profile / Auth Buttons */}
+          <div className="flex items-center gap-2.5">
             {user ? (
               <>
+                {/* Time-Banking Wallet Pill */}
+                <Link
+                  to="/learn"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold transition-colors"
+                  title="Time-Banking Credits & Escrow Ledger"
+                >
+                  <Coins className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{user?.timeCredits ?? 5} Credits</span>
+                </Link>
+
                 {/* Notification Dropdown */}
                 <div className="relative" ref={notifRef}>
                   <button

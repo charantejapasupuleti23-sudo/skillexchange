@@ -411,8 +411,14 @@ const EditProfilePage = () => {
     try {
       setSavingAvailability(true);
       const res = await api.put('/users/availability', { availability: updatedAvailability });
+      await api.post('/availability', {
+        dayOfWeek: availDay,
+        startTime: availStartTime,
+        endTime: availEndTime,
+      });
+
       if (res.data.success) {
-        addToast('Availability slot added!', 'success');
+        addToast('Availability slot published for direct booking!', 'success');
         await refreshUser();
       }
     } catch (err) {

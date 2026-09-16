@@ -26,6 +26,7 @@ import RequestsPage from './pages/RequestsPage';
 import MessagesPage from './pages/MessagesPage';
 import SessionsPage from './pages/SessionsPage';
 import LearnPage from './pages/LearnPage';
+import WorkshopsPage from './pages/WorkshopsPage';
 
 function App() {
   return (
@@ -108,6 +109,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <LearnPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="workshops"
+                  element={
+                    <ProtectedRoute>
+                      <WorkshopsPage />
                     </ProtectedRoute>
                   }
                 />

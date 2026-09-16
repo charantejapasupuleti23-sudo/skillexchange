@@ -22,9 +22,31 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: [true, 'Message text cannot be empty'],
+      default: '',
       trim: true,
-      maxlength: [3000, 'Message cannot exceed 3000 characters'],
+      maxlength: [5000, 'Message cannot exceed 5000 characters'],
+    },
+    messageType: {
+      type: String,
+      enum: ['text', 'code', 'file', 'session_proposal'],
+      default: 'text',
+    },
+    codeSnippet: {
+      code: { type: String, default: '' },
+      language: { type: String, default: 'javascript' },
+    },
+    fileAttachment: {
+      url: { type: String, default: '' },
+      name: { type: String, default: '' },
+      size: { type: Number, default: 0 },
+      mimeType: { type: String, default: '' },
+    },
+    sessionProposal: {
+      skillName: { type: String, default: '' },
+      date: { type: String, default: '' },
+      time: { type: String, default: '' },
+      meetingLink: { type: String, default: '' },
+      notes: { type: String, default: '' },
     },
     read: {
       type: Boolean,

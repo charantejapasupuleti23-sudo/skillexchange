@@ -2,14 +2,15 @@ const Session = require('../models/Session');
 const Connection = require('../models/Connection');
 const User = require('../models/User');
 const Skill = require('../models/Skill');
-const Message = require('../models/Message');
+const Availability = require('../models/Availability');
 const ErrorResponse = require('../utils/errorResponse');
 const { createNotification } = require('../utils/notify');
 const { generateGoogleMeetLink } = require('../utils/meetingLink');
 const sendEmail = require('../utils/sendEmail');
 const { sessionScheduledEmail, sessionConfirmedEmail } = require('../utils/emailTemplates');
+const { evaluateUserBadges, recordCreditTransaction } = require('../utils/gamification');
 
-// @desc    Schedule a new learning session
+// @desc    Schedule a new learning session (with escrow hold)
 // @route   POST /api/sessions
 // @access  Private
 exports.createSession = async (req, res, next) => {
@@ -24,21 +25,31 @@ exports.createSession = async (req, res, next) => {
       endTime,
       meetingLink,
       notes,
+      availabilitySlotId,
     } = req.body;
 
-    if (!connectionId || !teacherId || !learnerId || !skillId || !date || !startTime || !endTime) {
+    if (!teacherId || !learnerId || !skillId || !date || !startTime || !endTime) {
       return next(new ErrorResponse('Please provide all required session details', 400));
     }
 
-    // Verify connection
-    const connection = await Connection.findById(connectionId);
-    if (!connection) {
-      return next(new ErrorResponse('Connection not found', 404));
+    // Verify authorization: User must be teacher or learner
+    if (req.user.id !== teacherId && req.user.id !== learnerId) {
+      return next(new ErrorResponse('You are not authorized to schedule this session', 403));
     }
 
-    const isMember = connection.users.some((u) => u.toString() === req.user.id);
-    if (!isMember) {
-      return next(new ErrorResponse('You are not authorized to schedule a session for this connection', 403));
+    // Check learner credit balance for escrow hold (1 credit)
+    const learner = await User.findById(learnerId);
+    if (!learner) {
+      return next(new ErrorResponse('Learner user not found', 404));
+    }
+
+    if ((learner.timeCredits || 0) < 1) {
+      return next(
+        new ErrorResponse(
+          'Learner does not have enough Time Credits (1 credit required to book a session). Teach a session or earn credits first!',
+          400
+        )
+      );
     }
 
     // Prevent scheduling in the past
@@ -50,17 +61,15 @@ exports.createSession = async (req, res, next) => {
       return next(new ErrorResponse('Cannot schedule a session for a date in the past', 400));
     }
 
-    // Determine other party for notification
-    const otherUserId = req.user.id === teacherId ? learnerId : teacherId;
-
-    // Use provided meeting link or auto-generate a valid Google Meet link
+    // Auto-generate a valid Google Meet link if not provided
     const finalMeetingLink =
       meetingLink && meetingLink.trim().length > 0
         ? meetingLink.trim()
         : generateGoogleMeetLink();
 
+    // Create session record with escrow hold status
     const session = await Session.create({
-      connection: connectionId,
+      connection: connectionId || undefined,
       teacher: teacherId,
       learner: learnerId,
       skill: skillId,
@@ -70,7 +79,29 @@ exports.createSession = async (req, res, next) => {
       meetingLink: finalMeetingLink,
       notes: notes || '',
       status: 'Pending',
+      creditCost: 1,
+      escrowStatus: 'held',
+      availabilitySlot: availabilitySlotId || undefined,
     });
+
+    // Hold 1 credit in escrow from learner
+    await recordCreditTransaction({
+      userId: learnerId,
+      type: 'session_hold',
+      amount: 1,
+      description: `Escrow hold for session booking (${startTime} - ${endTime})`,
+      sessionId: session._id,
+      peerId: teacherId,
+    });
+
+    // If booked from an availability slot, mark the slot as booked
+    if (availabilitySlotId) {
+      await Availability.findByIdAndUpdate(availabilitySlotId, {
+        isBooked: true,
+        bookedBy: learnerId,
+        bookedSession: session._id,
+      });
+    }
 
     const populatedSession = await Session.findById(session._id)
       .populate('teacher', 'name username email profileImage rating')
@@ -78,18 +109,19 @@ exports.createSession = async (req, res, next) => {
       .populate('skill', 'name category icon');
 
     // Notify the other party
+    const otherUserId = req.user.id === teacherId ? learnerId : teacherId;
     const io = req.app.get('io');
     await createNotification(io, {
       recipient: otherUserId,
       sender: req.user.id,
       type: 'session_scheduled',
-      title: 'New Session Scheduled',
-      message: `${req.user.name} requested a learning session for ${populatedSession.skill.name} on ${new Date(date).toLocaleDateString()} at ${startTime}.`,
+      title: 'New Session Scheduled (1 Credit in Escrow)',
+      message: `${req.user.name} scheduled a learning session for ${populatedSession.skill.name} on ${new Date(date).toLocaleDateString()} at ${startTime}.`,
       referenceId: session._id,
       referenceType: 'Session',
     });
 
-    // Send email invitations with Google Meet link to both participants
+    // Send email invitations with Google Meet link
     try {
       const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
       const formattedDate = new Date(date).toLocaleDateString(undefined, {
@@ -100,18 +132,17 @@ exports.createSession = async (req, res, next) => {
       });
 
       const teacher = populatedSession.teacher;
-      const learner = populatedSession.learner;
+      const learnerObj = populatedSession.learner;
       const skillName = populatedSession.skill.name;
 
-      // Email to other party (recipient)
-      const recipientUser = req.user.id === teacher._id.toString() ? learner : teacher;
+      const recipientUser = req.user.id === teacher._id.toString() ? learnerObj : teacher;
       if (recipientUser?.email) {
         const recipientHtml = sessionScheduledEmail({
           recipientName: recipientUser.name,
           otherPartyName: req.user.name,
           skillName,
           teacherName: teacher.name,
-          learnerName: learner.name,
+          learnerName: learnerObj.name,
           date: formattedDate,
           startTime,
           endTime,
@@ -127,76 +158,13 @@ exports.createSession = async (req, res, next) => {
           html: recipientHtml,
         });
       }
-
-      // Confirmation email to initiator if email available
-      if (req.user?.email && req.user.email !== recipientUser?.email) {
-        const initiatorHtml = sessionScheduledEmail({
-          recipientName: req.user.name,
-          otherPartyName: recipientUser.name,
-          skillName,
-          teacherName: teacher.name,
-          learnerName: learner.name,
-          date: formattedDate,
-          startTime,
-          endTime,
-          meetingLink: finalMeetingLink,
-          notes: session.notes,
-          clientUrl,
-        });
-
-        await sendEmail({
-          email: req.user.email,
-          subject: `Session Scheduled Confirmation: ${skillName} with ${recipientUser.name}`,
-          message: `Your learning session for ${skillName} is scheduled for ${formattedDate} at ${startTime}. Google Meet Link: ${finalMeetingLink}`,
-          html: initiatorHtml,
-        });
-      }
     } catch (emailErr) {
       console.error('[Email Error in createSession]', emailErr.message);
     }
 
-    // Send auto chat message to connection so learner & teacher get the Google Meet link in their chat session
-    if (connectionId) {
-      try {
-        const formattedDateStr = new Date(date).toLocaleDateString(undefined, {
-          weekday: 'short',
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        });
-
-        const chatMessageText = `📹 **Google Meet Learning Session Scheduled**\n\n• **Skill**: ${populatedSession.skill.name}\n• **Date**: ${formattedDateStr}\n• **Time**: ${startTime} - ${endTime}\n• **Google Meet Link**: ${finalMeetingLink}${notes ? `\n• **Agenda**: ${notes}` : ''}`;
-
-        const chatMsg = await Message.create({
-          conversation: connectionId,
-          sender: req.user.id,
-          receiver: otherUserId,
-          text: chatMessageText,
-        });
-
-        await Connection.findByIdAndUpdate(connectionId, {
-          lastActivityAt: new Date(),
-        });
-
-        if (io) {
-          const populatedMsg = await Message.findById(chatMsg._id)
-            .populate('sender', 'name username profileImage')
-            .populate('receiver', 'name username profileImage');
-
-          io.to(`conv_${connectionId}`).emit('new_message', populatedMsg);
-          io.to(`user_${otherUserId}`).emit('message_notification', {
-            conversationId: connectionId,
-            message: populatedMsg,
-          });
-        }
-      } catch (chatErr) {
-        console.error('[Chat Message Error in createSession]', chatErr.message);
-      }
-    }
-
     res.status(201).json({
       success: true,
-      message: 'Learning session scheduled successfully',
+      message: 'Learning session scheduled with 1 Time Credit secured in escrow.',
       data: populatedSession,
     });
   } catch (error) {
@@ -204,7 +172,7 @@ exports.createSession = async (req, res, next) => {
   }
 };
 
-// @desc    Get all sessions for current user (as teacher or learner)
+// @desc    Get all sessions for current user
 // @route   GET /api/sessions
 // @access  Private
 exports.getSessions = async (req, res, next) => {
@@ -227,8 +195,8 @@ exports.getSessions = async (req, res, next) => {
     }
 
     const sessions = await Session.find(query)
-      .populate('teacher', 'name username profileImage rating')
-      .populate('learner', 'name username profileImage rating')
+      .populate('teacher', 'name username profileImage rating email bio')
+      .populate('learner', 'name username profileImage rating email bio')
       .populate('skill', 'name category icon')
       .sort({ date: 1, startTime: 1 });
 
@@ -248,8 +216,8 @@ exports.getSessions = async (req, res, next) => {
 exports.getSessionById = async (req, res, next) => {
   try {
     const session = await Session.findById(req.params.id)
-      .populate('teacher', 'name username profileImage rating bio occupation')
-      .populate('learner', 'name username profileImage rating bio occupation')
+      .populate('teacher', 'name username profileImage rating bio occupation email')
+      .populate('learner', 'name username profileImage rating bio occupation email')
       .populate('skill', 'name category icon description');
 
     if (!session) {
@@ -295,14 +263,6 @@ exports.acceptSession = async (req, res, next) => {
       return next(new ErrorResponse('Not authorized to accept this session', 403));
     }
 
-    if (session.status === 'Confirmed') {
-      return res.status(200).json({
-        success: true,
-        message: 'Session is already confirmed',
-        data: session,
-      });
-    }
-
     if (session.status !== 'Pending') {
       return next(new ErrorResponse(`Cannot accept session with status "${session.status}"`, 400));
     }
@@ -326,7 +286,7 @@ exports.acceptSession = async (req, res, next) => {
       referenceType: 'Session',
     });
 
-    // Send confirmation email with Google Meet link to both participants
+    // Send confirmation email
     try {
       const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
       const formattedDate = new Date(session.date).toLocaleDateString(undefined, {
@@ -365,34 +325,6 @@ exports.acceptSession = async (req, res, next) => {
       console.error('[Email Error in acceptSession]', emailErr.message);
     }
 
-    // Send auto chat message to connection confirming session with Google Meet link
-    if (session.connection) {
-      try {
-        const chatMessageText = `✅ **Session Confirmed!**\n\n• **Skill**: ${session.skill.name}\n• **Google Meet Link**: ${session.meetingLink}`;
-
-        const chatMsg = await Message.create({
-          conversation: session.connection,
-          sender: req.user.id,
-          receiver: otherUser._id,
-          text: chatMessageText,
-        });
-
-        await Connection.findByIdAndUpdate(session.connection, {
-          lastActivityAt: new Date(),
-        });
-
-        if (io) {
-          const populatedMsg = await Message.findById(chatMsg._id)
-            .populate('sender', 'name username profileImage')
-            .populate('receiver', 'name username profileImage');
-
-          io.to(`conv_${session.connection}`).emit('new_message', populatedMsg);
-        }
-      } catch (chatErr) {
-        console.error('[Chat Message Error in acceptSession]', chatErr.message);
-      }
-    }
-
     res.status(200).json({
       success: true,
       message: 'Session confirmed successfully',
@@ -403,7 +335,7 @@ exports.acceptSession = async (req, res, next) => {
   }
 };
 
-// @desc    Reject a scheduled session
+// @desc    Reject a scheduled session (refund escrow)
 // @route   PUT /api/sessions/:id/reject
 // @access  Private
 exports.rejectSession = async (req, res, next) => {
@@ -427,11 +359,33 @@ exports.rejectSession = async (req, res, next) => {
     }
 
     session.status = 'Rejected';
+    if (session.escrowStatus === 'held') {
+      session.escrowStatus = 'refunded';
+      // Refund escrow to learner
+      await recordCreditTransaction({
+        userId: session.learner,
+        type: 'session_refund',
+        amount: 1,
+        description: 'Escrow refunded: session proposal declined',
+        sessionId: session._id,
+        peerId: session.teacher,
+      });
+    }
+
+    // Release availability slot if attached
+    if (session.availabilitySlot) {
+      await Availability.findByIdAndUpdate(session.availabilitySlot, {
+        isBooked: false,
+        bookedBy: null,
+        bookedSession: null,
+      });
+    }
+
     await session.save();
 
     res.status(200).json({
       success: true,
-      message: 'Session proposal declined',
+      message: 'Session proposal declined. Time credit refunded.',
       data: session,
     });
   } catch (error) {
@@ -439,7 +393,7 @@ exports.rejectSession = async (req, res, next) => {
   }
 };
 
-// @desc    Cancel a session
+// @desc    Cancel a session (refund escrow)
 // @route   PUT /api/sessions/:id/cancel
 // @access  Private
 exports.cancelSession = async (req, res, next) => {
@@ -458,11 +412,33 @@ exports.cancelSession = async (req, res, next) => {
       return next(new ErrorResponse('Not authorized to modify this session', 403));
     }
 
-    if (!['Pending', 'Confirmed'].includes(session.status)) {
+    if (!['Pending', 'Confirmed', 'Rescheduled'].includes(session.status)) {
       return next(new ErrorResponse(`Cannot cancel a session that is already "${session.status}"`, 400));
     }
 
     session.status = 'Cancelled';
+    if (session.escrowStatus === 'held') {
+      session.escrowStatus = 'refunded';
+      // Refund escrow to learner
+      await recordCreditTransaction({
+        userId: session.learner,
+        type: 'session_refund',
+        amount: 1,
+        description: 'Escrow refunded: session cancelled',
+        sessionId: session._id,
+        peerId: session.teacher,
+      });
+    }
+
+    // Release availability slot if attached
+    if (session.availabilitySlot) {
+      await Availability.findByIdAndUpdate(session.availabilitySlot, {
+        isBooked: false,
+        bookedBy: null,
+        bookedSession: null,
+      });
+    }
+
     await session.save();
 
     const otherUserId =
@@ -474,14 +450,14 @@ exports.cancelSession = async (req, res, next) => {
       sender: req.user.id,
       type: 'session_cancelled',
       title: 'Session Cancelled',
-      message: `${req.user.name} cancelled the scheduled session.`,
+      message: `${req.user.name} cancelled the scheduled session. Time credit has been refunded.`,
       referenceId: session._id,
       referenceType: 'Session',
     });
 
     res.status(200).json({
       success: true,
-      message: 'Session cancelled',
+      message: 'Session cancelled and escrow credit refunded',
       data: session,
     });
   } catch (error) {
@@ -489,11 +465,129 @@ exports.cancelSession = async (req, res, next) => {
   }
 };
 
-// @desc    Mark session as completed and update progress & stats
+// @desc    Two-Way Mutual Session Check-in / Completion & Credit Release
 // @route   PUT /api/sessions/:id/complete
 // @access  Private
 exports.completeSession = async (req, res, next) => {
   try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return next(new ErrorResponse('Session not found', 404));
+    }
+
+    const isTeacher = session.teacher.toString() === req.user.id;
+    const isLearner = session.learner.toString() === req.user.id;
+
+    if (!isTeacher && !isLearner) {
+      return next(new ErrorResponse('Not authorized to check in for this session', 403));
+    }
+
+    if (session.status === 'Completed') {
+      return next(new ErrorResponse('Session is already completed', 400));
+    }
+
+    if (!['Confirmed', 'Rescheduled'].includes(session.status)) {
+      return next(new ErrorResponse(`Cannot complete a session with status "${session.status}"`, 400));
+    }
+
+    // Mark check-in for current user
+    if (isTeacher) {
+      session.confirmedByTeacher = true;
+      session.teacherCheckedInAt = new Date();
+    }
+    if (isLearner) {
+      session.confirmedByLearner = true;
+      session.learnerCheckedInAt = new Date();
+    }
+
+    // Complete session and release credits if either confirmed (or two-way confirmed)
+    session.status = 'Completed';
+    session.progressUpdated = true;
+    session.escrowStatus = 'released';
+    await session.save();
+
+    // 1. Release credit: Deposit +1 credit into teacher's wallet
+    await recordCreditTransaction({
+      userId: session.teacher,
+      type: 'session_earned',
+      amount: 1,
+      description: 'Earned 1 Time Credit for teaching a session',
+      sessionId: session._id,
+      peerId: session.learner,
+    });
+
+    // 2. Clear learner escrow
+    const learner = await User.findById(session.learner);
+    if (learner) {
+      learner.escrowCredits = Math.max(0, (learner.escrowCredits || 0) - 1);
+
+      // Increment learner skill progress
+      const skillItem = learner.skillsToLearn.find(
+        (item) => item.skill.toString() === session.skill.toString()
+      );
+      if (skillItem) {
+        skillItem.sessionsCompleted = (skillItem.sessionsCompleted || 0) + 1;
+        skillItem.progress = Math.min(100, (skillItem.progress || 0) + 15);
+        skillItem.lastLearned = new Date();
+      }
+
+      // Update streaks
+      learner.streak = learner.streak || { current: 1, longest: 1, lastActiveDate: new Date() };
+      learner.streak.current = (learner.streak.current || 0) + 1;
+      learner.streak.longest = Math.max(learner.streak.longest || 1, learner.streak.current);
+      learner.streak.lastActiveDate = new Date();
+
+      await learner.save();
+    }
+
+    // 3. Update teacher stats & streak
+    const teacher = await User.findById(session.teacher);
+    if (teacher) {
+      teacher.completedSessions = (teacher.completedSessions || 0) + 1;
+      teacher.learnersHelped = (teacher.learnersHelped || 0) + 1;
+      teacher.streak = teacher.streak || { current: 1, longest: 1, lastActiveDate: new Date() };
+      teacher.streak.current = (teacher.streak.current || 0) + 1;
+      teacher.streak.longest = Math.max(teacher.streak.longest || 1, teacher.streak.current);
+      teacher.streak.lastActiveDate = new Date();
+      await teacher.save();
+    }
+
+    // 4. Evaluate badges for both users
+    await Promise.all([
+      evaluateUserBadges(session.teacher),
+      evaluateUserBadges(session.learner),
+    ]);
+
+    const io = req.app.get('io');
+    const otherUserId = isTeacher ? session.learner : session.teacher;
+
+    await createNotification(io, {
+      recipient: otherUserId,
+      sender: req.user.id,
+      type: 'session_completed',
+      title: 'Session Completed & Verified! 🎉',
+      message: `The session has been marked completed. Teacher earned 1 Time Credit. Please leave a review and skill endorsement!`,
+      referenceId: session._id,
+      referenceType: 'Session',
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Session verified & completed! 1 Time Credit released to mentor.',
+      data: session,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update Collaborative Workspace Scratchpad & Code Editor
+// @route   PUT /api/sessions/:id/workspace
+// @access  Private
+exports.updateWorkspace = async (req, res, next) => {
+  try {
+    const { workspaceNotes, workspaceCode, workspaceLanguage } = req.body;
     const session = await Session.findById(req.params.id);
 
     if (!session) {
@@ -505,62 +599,37 @@ exports.completeSession = async (req, res, next) => {
       session.learner.toString() === req.user.id;
 
     if (!isAuthorized) {
-      return next(new ErrorResponse('Not authorized to complete this session', 403));
+      return next(new ErrorResponse('Not authorized to edit this session workspace', 403));
     }
 
-    if (session.status === 'Completed') {
-      return next(new ErrorResponse('Session is already marked completed', 400));
-    }
+    if (workspaceNotes !== undefined) session.workspaceNotes = workspaceNotes;
+    if (workspaceCode !== undefined) session.workspaceCode = workspaceCode;
+    if (workspaceLanguage !== undefined) session.workspaceLanguage = workspaceLanguage;
 
-    if (session.status !== 'Confirmed') {
-      return next(new ErrorResponse(`Only a Confirmed session can be marked Completed (current status: "${session.status}")`, 400));
-    }
-
-    session.status = 'Completed';
-    session.progressUpdated = true;
     await session.save();
 
-    // Time-Banking: Teacher earns 1 credit, completedSessions & learnersHelped
-    await User.findByIdAndUpdate(session.teacher, {
-      $inc: { timeCredits: 1, completedSessions: 1, learnersHelped: 1 },
-    });
-
-    // Time-Banking: Learner consumes 1 credit & increment skill progress
-    const learner = await User.findById(session.learner);
-    if (learner) {
-      if (learner.timeCredits > 0) {
-        learner.timeCredits = Math.max(0, learner.timeCredits - 1);
-      }
-      const skillItem = learner.skillsToLearn.find(
-        (item) => item.skill.toString() === session.skill.toString()
-      );
-
-      if (skillItem) {
-        skillItem.sessionsCompleted = (skillItem.sessionsCompleted || 0) + 1;
-        skillItem.progress = Math.min(100, (skillItem.progress || 0) + 15);
-        skillItem.lastLearned = new Date();
-      }
-      await learner.save();
-    }
-
+    // Broadcast live workspace update via Socket.io
     const io = req.app.get('io');
-    const otherUserId =
-      session.teacher.toString() === req.user.id ? session.learner : session.teacher;
-
-    await createNotification(io, {
-      recipient: otherUserId,
-      sender: req.user.id,
-      type: 'session_completed',
-      title: 'Session Completed!',
-      message: `The session has been marked completed. Teacher earned 1 time credit. You can now leave a review!`,
-      referenceId: session._id,
-      referenceType: 'Session',
-    });
+    if (io) {
+      const otherUserId =
+        session.teacher.toString() === req.user.id ? session.learner : session.teacher;
+      io.to(`user_${otherUserId}`).emit('workspace_updated', {
+        sessionId: session._id,
+        workspaceNotes: session.workspaceNotes,
+        workspaceCode: session.workspaceCode,
+        workspaceLanguage: session.workspaceLanguage,
+        updatedBy: req.user.name,
+      });
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Session completed successfully. Time credits and progress updated.',
-      data: session,
+      message: 'Workspace saved successfully',
+      data: {
+        workspaceNotes: session.workspaceNotes,
+        workspaceCode: session.workspaceCode,
+        workspaceLanguage: session.workspaceLanguage,
+      },
     });
   } catch (error) {
     next(error);

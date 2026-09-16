@@ -9,6 +9,7 @@ const {
   cancelSession,
   completeSession,
   rescheduleSession,
+  updateWorkspace,
 } = require('../controllers/sessionController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -21,5 +22,6 @@ router.put('/:id/reject', rejectSession);
 router.put('/:id/cancel', cancelSession);
 router.put('/:id/complete', completeSession);
 router.put('/:id/reschedule', rescheduleSession);
+router.put('/:id/workspace', updateWorkspace);
 
 module.exports = router;

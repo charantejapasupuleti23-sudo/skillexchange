@@ -22,11 +22,12 @@ import {
   Award,
   GraduationCap,
   Clock,
-  User,
-  PanelRightClose,
-  PanelRightOpen,
   Video,
   ExternalLink,
+  Code,
+  Paperclip,
+  Copy,
+  FileCode,
 } from 'lucide-react';
 
 const MessagesPage = () => {
@@ -45,6 +46,11 @@ const MessagesPage = () => {
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [showBarterPanel, setShowBarterPanel] = useState(true);
+
+  // Code Snippet Sharing State
+  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [codeToShare, setCodeToShare] = useState('');
+  const [codeLang, setCodeLang] = useState('javascript');
 
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -225,7 +231,62 @@ const MessagesPage = () => {
 
   const peer = selectedConnection?.peer;
 
-  const renderMessageText = (text, isMe) => {
+  const handleSendCode = async (e) => {
+    e.preventDefault();
+    if (!codeToShare.trim()) return;
+
+    try {
+      const res = await api.post('/messages', {
+        connectionId: selectedConnection._id,
+        receiverId: peer._id,
+        text: `Shared ${codeLang} snippet`,
+        messageType: 'code',
+        codeSnippet: {
+          code: codeToShare.trim(),
+          language: codeLang,
+        },
+      });
+
+      if (res.data.success) {
+        setMessages((prev) => [...prev, res.data.data]);
+        setCodeToShare('');
+        setIsCodeModalOpen(false);
+        addToast('Code snippet shared!', 'success');
+      }
+    } catch (err) {
+      addToast('Failed to send code snippet', 'error');
+    }
+  };
+
+  const renderMessageContent = (msg, isMe) => {
+    // Rich code block
+    if (msg.messageType === 'code' && msg.codeSnippet?.code) {
+      return (
+        <div className="space-y-2 min-w-[220px]">
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 bg-slate-900/90 px-3 py-1.5 rounded-t-xl">
+            <span className="font-bold uppercase tracking-wider">{msg.codeSnippet.language || 'code'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(msg.codeSnippet.code);
+                addToast('Code copied to clipboard!', 'info');
+              }}
+              className="hover:text-white flex items-center gap-1 text-[10px]"
+            >
+              <Copy className="w-3 h-3" />
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre className="p-3 bg-slate-950 text-emerald-400 rounded-b-xl text-xs font-mono overflow-x-auto max-h-60">
+            {msg.codeSnippet.code}
+          </pre>
+          {msg.text && !msg.text.startsWith('Shared') && <p className="text-xs pt-1">{msg.text}</p>}
+        </div>
+      );
+    }
+
+    // Default text with link & Google Meet detection
+    const text = msg.text || '';
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
     const googleMeetMatch = text.match(/(https:\/\/meet\.google\.com\/[a-z0-9-]+)/i);
@@ -428,7 +489,7 @@ const MessagesPage = () => {
                           : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs shadow-xs'
                       }`}
                     >
-                      {renderMessageText(msg.text, isMe)}
+                      {renderMessageContent(msg, isMe)}
                       <div
                         className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
                           isMe ? 'text-indigo-200' : 'text-slate-400'
@@ -469,11 +530,29 @@ const MessagesPage = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Bar */}
+          {/* Input Bar with Code Snippet Action */}
           <form
             onSubmit={handleSendMessage}
             className="p-3.5 bg-white border-t border-slate-200/80 flex items-center gap-2"
           >
+            <button
+              type="button"
+              onClick={() => setIsCodeModalOpen(true)}
+              title="Share a code snippet"
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            >
+              <Code className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsScheduleModalOpen(true)}
+              title="Schedule a live Google Meet session"
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+            </button>
+
             <input
               type="text"
               value={newMessageText}
@@ -596,6 +675,61 @@ const MessagesPage = () => {
           }}
         />
       )}
+
+      {/* Share Code Snippet Modal */}
+      <Modal
+        isOpen={isCodeModalOpen}
+        onClose={() => setIsCodeModalOpen(false)}
+        title="Share Code Snippet in Chat"
+      >
+        <form onSubmit={handleSendCode} className="space-y-4 text-xs sm:text-sm">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Language:</label>
+            <select
+              value={codeLang}
+              onChange={(e) => setCodeLang(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+            >
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="typescript">TypeScript</option>
+              <option value="html">HTML / CSS</option>
+              <option value="sql">SQL</option>
+              <option value="cpp">C++</option>
+              <option value="java">Java</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Code Snippet:</label>
+            <textarea
+              value={codeToShare}
+              onChange={(e) => setCodeToShare(e.target.value)}
+              rows={8}
+              placeholder="// Paste your code here..."
+              className="w-full p-3 rounded-xl border border-slate-800 bg-slate-900 text-emerald-400 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden resize-none"
+              spellCheck={false}
+              required
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsCodeModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs"
+            >
+              Share Snippet
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -6,6 +6,8 @@ import MatchScore from '../components/MatchScore';
 import SkillBadge from '../components/SkillBadge';
 import EmptyState from '../components/EmptyState';
 import SendRequestModal from '../components/SendRequestModal';
+import MatchBreakdownModal from '../components/MatchBreakdownModal';
+import BookSessionModal from '../components/BookSessionModal';
 import {
   Sparkles,
   CheckCircle2,
@@ -45,6 +47,14 @@ const MatchesPage = () => {
   // Modal State
   const [selectedUser, setSelectedUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Match Breakdown Modal State
+  const [breakdownPeer, setBreakdownPeer] = useState(null);
+  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+
+  // Direct Booking Modal State
+  const [bookingMentor, setBookingMentor] = useState(null);
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
 
   // Check profile completeness
   const teachesCount = user?.skillsToTeach?.length || 0;
@@ -529,21 +539,44 @@ const MatchesPage = () => {
 
                   {/* Right Column: Match Score, Breakdown Progress & Action (3 cols) */}
                   <div className="lg:col-span-3 flex flex-col items-end justify-between h-full space-y-2 border-t lg:border-t-0 lg:border-l border-slate-100 pt-2 lg:pt-0 lg:pl-4">
-                    <div className="w-full flex items-center justify-between lg:flex-col lg:items-end gap-1">
+                    <div
+                      className="w-full flex items-center justify-between lg:flex-col lg:items-end gap-1 cursor-pointer hover:opacity-90"
+                      onClick={() => {
+                        setBreakdownPeer({
+                          ...peer,
+                          matchScore: matchItem.matchScore,
+                          reasons: matchItem.reasons,
+                          breakdown: matchItem.breakdown,
+                          skillsTheyTeachYou: matchItem.skillsTheyTeachYou,
+                          skillsYouTeachThem: matchItem.skillsYouTeachThem,
+                        });
+                        setIsBreakdownOpen(true);
+                      }}
+                      title="Click to view full AI match breakdown"
+                    >
                       <MatchScore score={matchItem.matchScore} breakdown={breakdown} showBreakdown={true} />
+                      <span className="text-[10px] text-indigo-600 font-bold hover:underline">
+                        View Breakdown ↗
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full pt-1">
-                      <Link
-                        to={`/profile/${peer._id}`}
-                        className="flex-1 text-center py-1.5 px-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                    <div className="flex items-center gap-1.5 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookingMentor(peer);
+                          setIsBookingOpen(true);
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition-colors"
                       >
-                        Profile
-                      </Link>
+                        <Calendar className="w-3 h-3" />
+                        <span>Book</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleConnect(peer)}
-                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors"
                       >
                         <span>Trade</span>
                         <ArrowRight className="w-3 h-3" />
@@ -562,6 +595,28 @@ const MatchesPage = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         targetUser={selectedUser}
+      />
+
+      {/* Match Breakdown Modal */}
+      <MatchBreakdownModal
+        isOpen={isBreakdownOpen}
+        onClose={() => setIsBreakdownOpen(false)}
+        peer={breakdownPeer}
+        onConnect={(target) => {
+          setSelectedUser(target);
+          setIsModalOpen(true);
+        }}
+        onBook={(target) => {
+          setBookingMentor(target);
+          setIsBookingOpen(true);
+        }}
+      />
+
+      {/* Direct Booking Modal */}
+      <BookSessionModal
+        isOpen={isBookingOpen}
+        onClose={() => setIsBookingOpen(false)}
+        mentor={bookingMentor}
       />
     </div>
   );

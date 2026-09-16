@@ -50,15 +50,27 @@ exports.getMessages = async (req, res, next) => {
   }
 };
 
-// @desc    Send a message in a connection
+// @desc    Send a message (text, code snippet, file link, or session proposal)
 // @route   POST /api/messages
 // @access  Private
 exports.sendMessage = async (req, res, next) => {
   try {
-    const { connectionId, receiverId, text } = req.body;
+    const {
+      connectionId,
+      receiverId,
+      text,
+      messageType = 'text',
+      codeSnippet,
+      fileAttachment,
+      sessionProposal,
+    } = req.body;
 
-    if (!connectionId || !receiverId || !text) {
-      return next(new ErrorResponse('Please provide connectionId, receiverId, and text', 400));
+    if (!connectionId || !receiverId) {
+      return next(new ErrorResponse('Please provide connectionId and receiverId', 400));
+    }
+
+    if (!text && !codeSnippet?.code && !fileAttachment?.url && !sessionProposal?.skillName) {
+      return next(new ErrorResponse('Message cannot be completely empty', 400));
     }
 
     const connection = await Connection.findById(connectionId);
@@ -77,7 +89,11 @@ exports.sendMessage = async (req, res, next) => {
       conversation: connectionId,
       sender: req.user.id,
       receiver: receiverId,
-      text: text.trim(),
+      text: text?.trim() || '',
+      messageType,
+      codeSnippet: codeSnippet || undefined,
+      fileAttachment: fileAttachment || undefined,
+      sessionProposal: sessionProposal || undefined,
     });
 
     // Update connection activity
@@ -99,13 +115,19 @@ exports.sendMessage = async (req, res, next) => {
       });
     }
 
+    // Determine notification preview text
+    let previewText = text;
+    if (messageType === 'code') previewText = 'Shared a code snippet';
+    else if (messageType === 'file') previewText = `Shared a file: ${fileAttachment?.name || 'Attachment'}`;
+    else if (messageType === 'session_proposal') previewText = `Proposed a session: ${sessionProposal?.skillName || 'Practice'}`;
+
     // Send in-app notification to receiver
     await createNotification(io, {
       recipient: receiverId,
       sender: req.user.id,
       type: 'new_message',
       title: 'New Message',
-      message: `${req.user.name}: "${text.length > 50 ? text.substring(0, 47) + '...' : text}"`,
+      message: `${req.user.name}: "${previewText?.length > 50 ? previewText.substring(0, 47) + '...' : previewText}"`,
       referenceId: connectionId,
       referenceType: 'Connection',
     });
