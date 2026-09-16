@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Flame,
   Coins,
+  MessageSquare,
 } from 'lucide-react';
 
 const ProfilePage = () => {
@@ -166,7 +167,15 @@ const ProfilePage = () => {
             ) : (
               <div className="flex flex-col items-center sm:items-end gap-2">
                 {matchData && <MatchScore score={matchData.matchScore} />}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/messages?userId=${profileUser._id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs shadow-xs transition-all hover:scale-102"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Message</span>
+                  </Link>
+
                   <button
                     type="button"
                     onClick={() => setIsBookModalOpen(true)}

@@ -125,8 +125,8 @@ const calculateMatchScore = (userA, userB, options = {}) => {
   // Base Skills Match Points (Max 45 points)
   let skillsScore = 0;
   if (skillsTheyTeachYou.length > 0 || skillsYouTeachThem.length > 0) {
-    const rawTeachYou = Math.min(22.5, theyTeachYouSimSum * 18);
-    const rawTeachThem = Math.min(22.5, youTeachThemSimSum * 18);
+    const rawTeachYou = Math.min(22.5, theyTeachYouSimSum * 22.5);
+    const rawTeachThem = Math.min(22.5, youTeachThemSimSum * 22.5);
     skillsScore = Math.round(rawTeachYou + rawTeachThem);
   }
 
@@ -247,8 +247,10 @@ const calculateMatchScore = (userA, userB, options = {}) => {
     reasons,
     breakdown: {
       skillsScore: totalSkills,
+      mutual: totalSkills,
       proficiencyScore,
       scheduleScore,
+      availability: scheduleScore,
       reputationScore,
       total: totalScore,
       percentages: breakdownPercentages,

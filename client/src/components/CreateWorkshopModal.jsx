@@ -17,6 +17,8 @@ const CreateWorkshopModal = ({ isOpen, onClose, userSkills, onSuccess }) => {
   const [capacity, setCapacity] = useState(15);
   const [creditCost, setCreditCost] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [allSkills, setAllSkills] = useState([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -24,11 +26,37 @@ const CreateWorkshopModal = ({ isOpen, onClose, userSkills, onSuccess }) => {
       d.setDate(d.getDate() + 2);
       setDate(d.toISOString().split('T')[0]);
 
+      // Fetch all platform skills so user has options even without profile skills
+      const fetchSkills = async () => {
+        try {
+          setLoadingSkills(true);
+          const res = await api.get('/skills');
+          if (res.data.success && res.data.data) {
+            setAllSkills(res.data.data);
+            if (!skillId) {
+              if (userSkills && userSkills.length > 0) {
+                const uSkillId = userSkills[0].skill?._id || userSkills[0].skill;
+                setSkillId(uSkillId);
+              } else if (res.data.data.length > 0) {
+                setSkillId(res.data.data[0]._id);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load skills:', err);
+        } finally {
+          setLoadingSkills(false);
+        }
+      };
+
+      fetchSkills();
+
       if (userSkills && userSkills.length > 0) {
-        setSkillId(userSkills[0].skill?._id || userSkills[0].skill);
+        const initialId = userSkills[0].skill?._id || userSkills[0].skill;
+        setSkillId(initialId);
       }
     }
-  }, [isOpen, userSkills]);
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -95,11 +123,22 @@ const CreateWorkshopModal = ({ isOpen, onClose, userSkills, onSuccess }) => {
               className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
               required
             >
-              {userSkills?.map((s, idx) => (
-                <option key={idx} value={s.skill?._id || s.skill}>
-                  {s.skill?.name || 'Skill'} ({s.level || 'Expert'})
-                </option>
-              ))}
+              {userSkills && userSkills.length > 0 && (
+                <optgroup label="Your Teaching Skills">
+                  {userSkills.map((s, idx) => (
+                    <option key={`usr-${idx}`} value={s.skill?._id || s.skill}>
+                      {s.skill?.name || 'Skill'} ({s.level || 'Expert'})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label={userSkills && userSkills.length > 0 ? "All Platform Skills" : "Select Skill"}>
+                {allSkills.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name} ({s.category})
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
 

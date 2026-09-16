@@ -24,12 +24,37 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
     return `https://meet.google.com/${part(3)}-${part(4)}-${part(3)}`;
   };
 
+  const [allSkills, setAllSkills] = useState([]);
+
   React.useEffect(() => {
     if (isOpen) {
       // Set default minimum date (tomorrow)
       const d = new Date();
       d.setDate(d.getDate() + 1);
       setDate(d.toISOString().split('T')[0]);
+
+      // Fetch all skills as fallback
+      const fetchSkills = async () => {
+        try {
+          const res = await api.get('/skills');
+          if (res.data.success && res.data.data) {
+            setAllSkills(res.data.data);
+            if (!skillId) {
+              if (connection?.sharedSkills?.length > 0) {
+                setSkillId(connection.sharedSkills[0]._id || connection.sharedSkills[0]);
+              } else if (peerUser?.skillsToTeach?.length > 0) {
+                setSkillId(peerUser.skillsToTeach[0].skill?._id || peerUser.skillsToTeach[0].skill);
+              } else if (res.data.data.length > 0) {
+                setSkillId(res.data.data[0]._id);
+              }
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      fetchSkills();
 
       // Set default skill
       if (connection?.sharedSkills?.length > 0) {
@@ -135,16 +160,33 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
             required
           >
-            {connection?.sharedSkills?.map((s, idx) => (
-              <option key={idx} value={s._id || s}>
-                {s.name || 'Shared Skill'}
-              </option>
-            ))}
-            {peerUser?.skillsToTeach?.map((s, idx) => (
-              <option key={`p-${idx}`} value={s.skill?._id || s.skill}>
-                {s.skill?.name || 'Skill'} ({s.level || 'Peer teaches'})
-              </option>
-            ))}
+            {connection?.sharedSkills?.length > 0 && (
+              <optgroup label="Shared Agreement Skills">
+                {connection.sharedSkills.map((s, idx) => (
+                  <option key={`shared-${idx}`} value={s._id || s}>
+                    {s.name || 'Shared Skill'}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {peerUser?.skillsToTeach?.length > 0 && (
+              <optgroup label={`${peerUser.name}'s Skills`}>
+                {peerUser.skillsToTeach.map((s, idx) => (
+                  <option key={`p-${idx}`} value={s.skill?._id || s.skill}>
+                    {s.skill?.name || 'Skill'} ({s.level || 'Expert'})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {(!connection?.sharedSkills?.length && !peerUser?.skillsToTeach?.length) && (
+              <optgroup label="All Skills">
+                {allSkills.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.name} ({s.category})
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
