@@ -142,6 +142,88 @@ exports.sendMessage = async (req, res, next) => {
   }
 };
 
+// @desc    Respond to in-chat session proposal (Accept / Decline)
+// @route   PUT /api/messages/:id/respond-proposal
+// @access  Private
+exports.respondToProposal = async (req, res, next) => {
+  try {
+    const { status } = req.body; // 'accepted' or 'declined'
+    const message = await Message.findById(req.params.id);
+
+    if (!message) {
+      return next(new ErrorResponse('Message not found', 404));
+    }
+
+    if (message.receiver.toString() !== req.user.id) {
+      return next(new ErrorResponse('Only the recipient can respond to this session proposal', 403));
+    }
+
+    if (message.messageType !== 'session_proposal' || !message.sessionProposal) {
+      return next(new ErrorResponse('This message is not a session proposal', 400));
+    }
+
+    const Session = require('../models/Session');
+    const { generateGoogleMeetLink } = require('../utils/meetingLink');
+
+    if (status === 'accepted') {
+      const prop = message.sessionProposal;
+      const meetLink = prop.meetingLink || generateGoogleMeetLink();
+
+      const session = await Session.create({
+        connection: message.conversation,
+        teacher: prop.teacher || message.sender,
+        learner: prop.learner || message.receiver,
+        skill: prop.skillId || undefined,
+        skillName: prop.skillName || 'Skill Session',
+        date: prop.date ? new Date(prop.date) : new Date(),
+        startTime: prop.startTime || '18:00',
+        endTime: prop.endTime || '19:00',
+        meetingLink: meetLink,
+        notes: prop.notes || 'Scheduled via in-chat proposal card.',
+        status: 'scheduled',
+      });
+
+      message.sessionProposal.status = 'accepted';
+      message.sessionProposal.meetingLink = meetLink;
+      message.sessionProposal.session = session._id;
+      await message.save();
+
+      const io = req.app.get('io');
+      if (io) {
+        await createNotification(io, {
+          recipient: message.sender,
+          sender: req.user.id,
+          type: 'session_scheduled',
+          title: 'Session Proposal Accepted! 🎉',
+          message: `${req.user.name} accepted your session proposal. Join Google Meet when ready!`,
+          referenceId: session._id,
+          referenceType: 'Session',
+        });
+      }
+    } else {
+      message.sessionProposal.status = 'declined';
+      await message.save();
+    }
+
+    const populated = await Message.findById(message._id)
+      .populate('sender', 'name username profileImage')
+      .populate('receiver', 'name username profileImage');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conv_${message.conversation}`).emit('message_updated', populated);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Session proposal ${status}`,
+      data: populated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Mark specific message as read
 // @route   PUT /api/messages/:id/read
 // @access  Private

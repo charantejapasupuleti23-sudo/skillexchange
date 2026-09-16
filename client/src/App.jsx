@@ -27,6 +27,7 @@ import MessagesPage from './pages/MessagesPage';
 import SessionsPage from './pages/SessionsPage';
 import LearnPage from './pages/LearnPage';
 import WorkshopsPage from './pages/WorkshopsPage';
+import CommunityPage from './pages/CommunityPage';
 
 function App() {
   return (
@@ -117,6 +118,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <WorkshopsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="community"
+                  element={
+                    <ProtectedRoute>
+                      <CommunityPage />
                     </ProtectedRoute>
                   }
                 />

@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useToast } from '../context/ToastContext';
-import ScheduleSessionModal from '../components/ScheduleSessionModal';
 import SkillBadge from '../components/SkillBadge';
-import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
 import {
   Send,
@@ -26,13 +24,19 @@ import {
   PanelRightOpen,
   Plus,
   Search,
+  Image as ImageIcon,
+  FileText,
+  Clock,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
 } from 'lucide-react';
 
 const MessagesPage = () => {
   const { user } = useAuth();
   const { socket, isUserOnline } = useSocket();
   const { addToast } = useToast();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetConnectionId = searchParams.get('connectionId');
   const targetUserId = searchParams.get('userId');
@@ -44,7 +48,6 @@ const MessagesPage = () => {
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [showBarterPanel, setShowBarterPanel] = useState(true);
 
   // New Chat Modal state
@@ -58,6 +61,21 @@ const MessagesPage = () => {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [codeToShare, setCodeToShare] = useState('');
   const [codeLang, setCodeLang] = useState('javascript');
+
+  // File / Image Attachment State
+  const [isFileModalOpen, setIsFileModalOpen] = useState(false);
+  const [fileUrl, setFileUrl] = useState('');
+  const [fileName, setFileName] = useState('');
+
+  // In-Chat Session Proposal Modal State
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
+  const [proposalTopic, setProposalTopic] = useState('');
+  const [proposalDate, setProposalDate] = useState('');
+  const [proposalStartTime, setProposalStartTime] = useState('18:00');
+  const [proposalEndTime, setProposalEndTime] = useState('19:00');
+  const [proposalNotes, setProposalNotes] = useState('');
+  const [proposalRole, setProposalRole] = useState('peerTeaches'); // 'peerTeaches' or 'iTeach'
+  const [actionLoadingProposalId, setActionLoadingProposalId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -131,6 +149,18 @@ const MessagesPage = () => {
 
     fetchConversation();
 
+    // Reset proposal defaults when switching conversation
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    setProposalDate(d.toISOString().split('T')[0]);
+    if (selectedConnection.sharedSkills?.length > 0) {
+      setProposalTopic(selectedConnection.sharedSkills[0].name || 'Skill Exchange Session');
+    } else if (selectedConnection.peer?.skillsToTeach?.length > 0) {
+      setProposalTopic(selectedConnection.peer.skillsToTeach[0].skill?.name || '1:1 Session');
+    } else {
+      setProposalTopic('System Design & Code Review');
+    }
+
     // Socket: Join conversation room
     if (socket) {
       socket.emit('join_conversation', selectedConnection._id);
@@ -166,9 +196,14 @@ const MessagesPage = () => {
           return [...prev, msg];
         });
       }
-      // Update preview in connections list
       setConnections((prev) =>
         prev.map((c) => (c._id === convId ? { ...c, lastMessage: msg } : c))
+      );
+    };
+
+    const handleMessageUpdated = (updatedMsg) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === updatedMsg._id ? updatedMsg : m))
       );
     };
 
@@ -179,10 +214,12 @@ const MessagesPage = () => {
     };
 
     socket.on('new_message', handleNewMessage);
+    socket.on('message_updated', handleMessageUpdated);
     socket.on('peer_typing', handlePeerTyping);
 
     return () => {
       socket.off('new_message', handleNewMessage);
+      socket.off('message_updated', handleMessageUpdated);
       socket.off('peer_typing', handlePeerTyping);
     };
   }, [socket, selectedConnection?._id]);
@@ -254,7 +291,6 @@ const MessagesPage = () => {
       setLoadingSearch(true);
       const res = await api.get(`/users?search=${encodeURIComponent(query)}&limit=8`);
       if (res.data.success) {
-        // Exclude current user
         const filtered = (res.data.data || []).filter((u) => u._id !== user?._id);
         setSearchResults(filtered);
       }
@@ -291,6 +327,7 @@ const MessagesPage = () => {
 
   const peer = selectedConnection?.peer;
 
+  // 8. Send Code Snippet
   const handleSendCode = async (e) => {
     e.preventDefault();
     if (!codeToShare.trim() || !selectedConnection) return;
@@ -301,7 +338,7 @@ const MessagesPage = () => {
       const res = await api.post('/messages', {
         connectionId: selectedConnection._id,
         receiverId: peerId,
-        text: `Shared ${codeLang} snippet`,
+        text: `Shared a ${codeLang} code snippet`,
         messageType: 'code',
         codeSnippet: {
           code: codeToShare.trim(),
@@ -320,34 +357,287 @@ const MessagesPage = () => {
     }
   };
 
+  // 9. Send File / Image Attachment
+  const handleSendFile = async (e) => {
+    e.preventDefault();
+    if (!fileUrl.trim() || !selectedConnection) return;
+
+    const peerId = selectedConnection.peer?._id || selectedConnection.peer?.id;
+
+    try {
+      const res = await api.post('/messages', {
+        connectionId: selectedConnection._id,
+        receiverId: peerId,
+        text: fileName ? `Attached: ${fileName}` : 'Shared an image attachment',
+        messageType: 'file',
+        fileAttachment: {
+          url: fileUrl.trim(),
+          name: fileName.trim() || 'Attachment',
+        },
+      });
+
+      if (res.data.success) {
+        setMessages((prev) => [...prev, res.data.data]);
+        setFileUrl('');
+        setFileName('');
+        setIsFileModalOpen(false);
+        addToast('Attachment shared!', 'success');
+      }
+    } catch (err) {
+      addToast('Failed to send attachment', 'error');
+    }
+  };
+
+  // 10. In-Chat Session Proposal Submission
+  const handleSendProposal = async (e) => {
+    e.preventDefault();
+    if (!proposalTopic || !proposalDate || !proposalStartTime || !selectedConnection) {
+      addToast('Please complete all required fields', 'error');
+      return;
+    }
+
+    const peerId = selectedConnection.peer?._id || selectedConnection.peer?.id;
+    const teacherId = proposalRole === 'peerTeaches' ? peerId : user?._id;
+    const learnerId = proposalRole === 'peerTeaches' ? user?._id : peerId;
+
+    try {
+      const res = await api.post('/messages', {
+        connectionId: selectedConnection._id,
+        receiverId: peerId,
+        text: `Proposed a 1:1 Live Practice Session for ${proposalTopic}`,
+        messageType: 'session_proposal',
+        sessionProposal: {
+          skillName: proposalTopic,
+          teacher: teacherId,
+          learner: learnerId,
+          date: proposalDate,
+          startTime: proposalStartTime,
+          endTime: proposalEndTime,
+          notes: proposalNotes || 'Proposed directly from in-app chat.',
+          status: 'pending',
+        },
+      });
+
+      if (res.data.success) {
+        setMessages((prev) => [...prev, res.data.data]);
+        setIsProposalModalOpen(false);
+        setProposalNotes('');
+        addToast('Session proposal sent directly in chat!', 'success');
+      }
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to send proposal', 'error');
+    }
+  };
+
+  // 11. Respond to In-Chat Proposal
+  const handleRespondProposal = async (messageId, status) => {
+    try {
+      setActionLoadingProposalId(messageId);
+      const res = await api.put(`/messages/${messageId}/respond-proposal`, { status });
+      if (res.data.success) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === messageId ? res.data.data : m))
+        );
+        if (status === 'accepted') {
+          addToast('Session accepted! Google Meet workspace room created.', 'success');
+        } else {
+          addToast('Session proposal declined.', 'info');
+        }
+      }
+    } catch (err) {
+      addToast(err.response?.data?.message || 'Failed to update proposal', 'error');
+    } finally {
+      setActionLoadingProposalId(null);
+    }
+  };
+
+  // Renders Rich Message Content
   const renderMessageContent = (msg, isMe) => {
-    // Rich code block
+    // 1. Session Proposal Card
+    if (msg.messageType === 'session_proposal' && msg.sessionProposal) {
+      const prop = msg.sessionProposal;
+      const isPending = prop.status === 'pending';
+      const isAccepted = prop.status === 'accepted';
+      const isDeclined = prop.status === 'declined';
+      const amRecipient = msg.receiver?._id === user?._id || msg.receiver === user?._id;
+
+      return (
+        <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 space-y-3 shadow-md border border-slate-800 min-w-[260px] sm:min-w-[320px]">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-1.5 font-bold text-amber-400 text-xs">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Session Proposal</span>
+            </div>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isAccepted
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : isDeclined
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }`}
+            >
+              {isAccepted ? '✓ Accepted' : isDeclined ? 'Declined' : 'Pending Response'}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+              Topic / Skill
+            </span>
+            <p className="font-bold text-slate-100 text-sm mt-0.5">{prop.skillName}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 bg-slate-950/60 p-2.5 rounded-xl">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>{prop.date || 'TBD'}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>{prop.startTime} - {prop.endTime}</span>
+            </div>
+          </div>
+
+          {prop.notes && (
+            <p className="text-[11px] text-slate-400 italic bg-slate-950/30 p-2 rounded-lg">
+              "{prop.notes}"
+            </p>
+          )}
+
+          {/* Action Area */}
+          <div className="pt-2 border-t border-slate-800">
+            {isPending ? (
+              amRecipient ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRespondProposal(msg._id, 'declined')}
+                    disabled={actionLoadingProposalId === msg._id}
+                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRespondProposal(msg._id, 'accepted')}
+                    disabled={actionLoadingProposalId === msg._id}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-xs"
+                  >
+                    {actionLoadingProposalId === msg._id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Accept Session</span>
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 text-center italic">
+                  Proposal sent • Waiting for peer confirmation
+                </p>
+              )
+            ) : isAccepted ? (
+              <div className="space-y-2">
+                {prop.meetingLink && (
+                  <a
+                    href={prop.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-colors"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Launch Google Meet Room</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <Link
+                  to="/sessions"
+                  className="w-full text-center text-[11px] text-indigo-400 hover:underline block"
+                >
+                  View in Sessions Management →
+                </Link>
+              </div>
+            ) : (
+              <p className="text-[11px] text-rose-400 text-center italic">
+                This proposal was declined. You can propose a new time above.
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Rich Syntax Highlighted Code Block
     if (msg.messageType === 'code' && msg.codeSnippet?.code) {
       return (
-        <div className="space-y-2 min-w-[220px]">
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 bg-slate-900/90 px-3 py-1.5 rounded-t-xl">
-            <span className="font-bold uppercase tracking-wider">{msg.codeSnippet.language || 'code'}</span>
+        <div className="space-y-2 min-w-[240px] max-w-lg">
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 bg-slate-900/95 px-3.5 py-1.5 rounded-t-xl border-b border-slate-800">
+            <span className="font-bold uppercase tracking-wider text-emerald-400">
+              {msg.codeSnippet.language || 'code'}
+            </span>
             <button
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(msg.codeSnippet.code);
                 addToast('Code copied to clipboard!', 'info');
               }}
-              className="hover:text-white flex items-center gap-1 text-[10px]"
+              className="hover:text-white flex items-center gap-1 text-[10px] text-slate-400 transition-colors"
             >
               <Copy className="w-3 h-3" />
               <span>Copy</span>
             </button>
           </div>
-          <pre className="p-3 bg-slate-950 text-emerald-400 rounded-b-xl text-xs font-mono overflow-x-auto max-h-60">
-            {msg.codeSnippet.code}
+          <pre className="p-3.5 bg-slate-950 text-emerald-300 rounded-b-xl text-xs font-mono overflow-x-auto max-h-72 leading-relaxed border border-slate-900 shadow-inner">
+            <code>{msg.codeSnippet.code}</code>
           </pre>
-          {msg.text && !msg.text.startsWith('Shared') && <p className="text-xs pt-1">{msg.text}</p>}
+          {msg.text && !msg.text.startsWith('Shared a') && (
+            <p className="text-xs pt-1">{msg.text}</p>
+          )}
         </div>
       );
     }
 
-    // Default text with link & Google Meet detection
+    // 3. File / Image Attachment
+    if (msg.messageType === 'file' && msg.fileAttachment?.url) {
+      const isImg = msg.fileAttachment.url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i);
+      return (
+        <div className="space-y-2 max-w-sm">
+          {isImg ? (
+            <a href={msg.fileAttachment.url} target="_blank" rel="noopener noreferrer">
+              <img
+                src={msg.fileAttachment.url}
+                alt={msg.fileAttachment.name || 'Attachment'}
+                className="rounded-xl max-h-60 w-full object-cover border border-slate-200 hover:opacity-95 transition-opacity"
+              />
+            </a>
+          ) : (
+            <a
+              href={msg.fileAttachment.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors"
+            >
+              <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-xs truncate">
+                  {msg.fileAttachment.name || 'File Attachment'}
+                </p>
+                <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <span>Open Resource</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </span>
+              </div>
+            </a>
+          )}
+          {msg.text && !msg.text.startsWith('Attached') && (
+            <p className="text-xs">{msg.text}</p>
+          )}
+        </div>
+      );
+    }
+
+    // 4. Default Text with Link & Google Meet detection
     const text = msg.text || '';
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const parts = text.split(urlRegex);
@@ -552,11 +842,11 @@ const MessagesPage = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsScheduleModalOpen(true)}
+                onClick={() => setIsProposalModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs"
               >
-                <Calendar className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Schedule Session</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Propose Session</span>
               </button>
 
               <button
@@ -583,7 +873,7 @@ const MessagesPage = () => {
             ) : messages.length === 0 ? (
               <div className="py-16 text-center text-xs text-slate-400 space-y-1">
                 <p className="font-semibold text-slate-600">No messages yet</p>
-                <p>Say hello to {peer?.name || 'your peer'} and arrange your skill exchange practice session!</p>
+                <p>Say hello to {peer?.name || 'your peer'} or drop an in-chat Session Proposal!</p>
               </div>
             ) : (
               messages.map((msg) => {
@@ -595,34 +885,38 @@ const MessagesPage = () => {
                 return (
                   <div key={msg._id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed ${
-                        isMe
+                      className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed ${
+                        msg.messageType === 'session_proposal'
+                          ? 'p-0 bg-transparent border-0'
+                          : isMe
                           ? 'bg-indigo-600 text-white rounded-tr-xs shadow-xs'
                           : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs shadow-xs'
                       }`}
                     >
                       {renderMessageContent(msg, isMe)}
-                      <div
-                        className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
-                          isMe ? 'text-indigo-200' : 'text-slate-400'
-                        }`}
-                      >
-                        <span>
-                          {new Date(msg.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        {isMe && (
+                      {msg.messageType !== 'session_proposal' && (
+                        <div
+                          className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
+                            isMe ? 'text-indigo-200' : 'text-slate-400'
+                          }`}
+                        >
                           <span>
-                            {msg.read ? (
-                              <CheckCheck className="w-3 h-3 text-emerald-300 inline" />
-                            ) : (
-                              <Check className="w-3 h-3 opacity-70 inline" />
-                            )}
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </span>
-                        )}
-                      </div>
+                          {isMe && (
+                            <span>
+                              {msg.read ? (
+                                <CheckCheck className="w-3 h-3 text-emerald-300 inline" />
+                              ) : (
+                                <Check className="w-3 h-3 opacity-70 inline" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -642,7 +936,7 @@ const MessagesPage = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Bar with Code Snippet Action */}
+          {/* Input Bar with Action Buttons */}
           <form
             onSubmit={handleSendMessage}
             className="p-3.5 bg-white border-t border-slate-200/80 flex items-center gap-2"
@@ -650,7 +944,7 @@ const MessagesPage = () => {
             <button
               type="button"
               onClick={() => setIsCodeModalOpen(true)}
-              title="Share a code snippet"
+              title="Share syntax-highlighted code snippet"
               className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 transition-colors"
             >
               <Code className="w-4 h-4" />
@@ -658,11 +952,21 @@ const MessagesPage = () => {
 
             <button
               type="button"
-              onClick={() => setIsScheduleModalOpen(true)}
-              title="Schedule a live Google Meet session"
+              onClick={() => setIsFileModalOpen(true)}
+              title="Share file or image link"
               className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 transition-colors"
             >
-              <Calendar className="w-4 h-4" />
+              <ImageIcon className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsProposalModalOpen(true)}
+              title="Propose actionable 1:1 session card in chat"
+              className="p-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold transition-colors flex items-center gap-1 text-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Propose</span>
             </button>
 
             <input
@@ -786,31 +1090,18 @@ const MessagesPage = () => {
             </div>
           </div>
 
-          {/* Quick Schedule Button */}
+          {/* Quick Action Button */}
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => setIsScheduleModalOpen(true)}
+              onClick={() => setIsProposalModalOpen(true)}
               className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Schedule Live Session</span>
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Propose Session in Chat</span>
             </button>
           </div>
         </div>
-      )}
-
-      {/* Schedule Session Modal */}
-      {selectedConnection && (
-        <ScheduleSessionModal
-          isOpen={isScheduleModalOpen}
-          onClose={() => setIsScheduleModalOpen(false)}
-          connection={selectedConnection}
-          peerUser={peer}
-          onSuccess={() => {
-            addToast('Session scheduled! View in Sessions tab.', 'success');
-          }}
-        />
       )}
 
       {/* Start New Chat Modal */}
@@ -862,7 +1153,9 @@ const MessagesPage = () => {
                     />
                     <div className="min-w-0">
                       <p className="font-semibold text-slate-900 text-xs truncate">{u.name}</p>
-                      <p className="text-[11px] text-slate-400 truncate">@{u.username} • {u.occupation || 'Member'}</p>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        @{u.username} • {u.occupation || 'Member'}
+                      </p>
                     </div>
                   </div>
 
@@ -890,6 +1183,124 @@ const MessagesPage = () => {
         </div>
       </Modal>
 
+      {/* In-Chat Session Proposal Modal */}
+      <Modal
+        isOpen={isProposalModalOpen}
+        onClose={() => setIsProposalModalOpen(false)}
+        title="Propose a Live Session (Direct in Chat)"
+      >
+        <form onSubmit={handleSendProposal} className="space-y-4 text-xs sm:text-sm text-slate-800">
+          <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-900">
+              Sends an interactive, actionable card in this chat. Once {peer?.name || 'your peer'} clicks Accept, it automatically provisions the session and Google Meet room!
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Session Role:</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setProposalRole('peerTeaches')}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors ${
+                  proposalRole === 'peerTeaches'
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {peer?.name || 'Peer'} teaches me
+              </button>
+              <button
+                type="button"
+                onClick={() => setProposalRole('iTeach')}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors ${
+                  proposalRole === 'iTeach'
+                    ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                I teach {peer?.name || 'Peer'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Topic / Skill Focus:</label>
+            <input
+              type="text"
+              value={proposalTopic}
+              onChange={(e) => setProposalTopic(e.target.value)}
+              placeholder="e.g. System Design Mock Interview & Caching Architecture"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Date:</label>
+              <input
+                type="date"
+                value={proposalDate}
+                onChange={(e) => setProposalDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Start Time:</label>
+              <input
+                type="time"
+                value={proposalStartTime}
+                onChange={(e) => setProposalStartTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">End Time:</label>
+              <input
+                type="time"
+                value={proposalEndTime}
+                onChange={(e) => setProposalEndTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Agenda / Focus Notes (Optional):</label>
+            <textarea
+              value={proposalNotes}
+              onChange={(e) => setProposalNotes(e.target.value)}
+              rows={2}
+              placeholder="Outline exercises, questions, or repo links to review..."
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsProposalModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Send Proposal Card</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Share Code Snippet Modal */}
       <Modal
         isOpen={isCodeModalOpen}
@@ -911,6 +1322,8 @@ const MessagesPage = () => {
               <option value="sql">SQL</option>
               <option value="cpp">C++</option>
               <option value="java">Java</option>
+              <option value="rust">Rust</option>
+              <option value="go">Go</option>
             </select>
           </div>
 
@@ -920,8 +1333,8 @@ const MessagesPage = () => {
               value={codeToShare}
               onChange={(e) => setCodeToShare(e.target.value)}
               rows={8}
-              placeholder="// Paste your code here..."
-              className="w-full p-3 rounded-xl border border-slate-800 bg-slate-900 text-emerald-400 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden resize-none"
+              placeholder="// Paste your code or algorithm here..."
+              className="w-full p-3 rounded-xl border border-slate-800 bg-slate-900 text-emerald-400 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden resize-none leading-relaxed"
               spellCheck={false}
               required
             />
@@ -940,6 +1353,68 @@ const MessagesPage = () => {
               className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs"
             >
               Share Snippet
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Share File / Image Attachment Modal */}
+      <Modal
+        isOpen={isFileModalOpen}
+        onClose={() => setIsFileModalOpen(false)}
+        title="Share File or Image Attachment"
+      >
+        <form onSubmit={handleSendFile} className="space-y-4 text-xs sm:text-sm">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Image or Document URL:</label>
+            <input
+              type="url"
+              value={fileUrl}
+              onChange={(e) => setFileUrl(e.target.value)}
+              placeholder="https://images.unsplash.com/... or https://github.com/..."
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Attachment Label (Optional):</label>
+            <input
+              type="text"
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              placeholder="e.g. Architecture Diagram or PR screenshot"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+            />
+          </div>
+
+          {fileUrl.trim() && (
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Preview</span>
+              <img
+                src={fileUrl.trim()}
+                alt="Preview"
+                className="max-h-40 rounded-lg mx-auto object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsFileModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs"
+            >
+              Attach to Chat
             </button>
           </div>
         </form>

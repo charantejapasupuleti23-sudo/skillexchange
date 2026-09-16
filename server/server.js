@@ -32,6 +32,9 @@ const reviewRoutes = require('./routes/reviewRoutes');
 const availabilityRoutes = require('./routes/availabilityRoutes');
 const workshopRoutes = require('./routes/workshopRoutes');
 const gamificationRoutes = require('./routes/gamificationRoutes');
+const channelRoutes = require('./routes/channelRoutes');
+const bountyRoutes = require('./routes/bountyRoutes');
+const highlightRoutes = require('./routes/highlightRoutes');
 const { initializeSocketIO } = require('./socket');
 
 // Error middleware
@@ -126,6 +129,9 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/workshops', workshopRoutes);
 app.use('/api/gamification', gamificationRoutes);
+app.use('/api/channels', channelRoutes);
+app.use('/api/bounties', bountyRoutes);
+app.use('/api/highlights', highlightRoutes);
 
 // 404 and Error handling
 app.use(notFound);

@@ -43,10 +43,20 @@ const messageSchema = new mongoose.Schema(
     },
     sessionProposal: {
       skillName: { type: String, default: '' },
+      skillId: { type: mongoose.Schema.Types.ObjectId, ref: 'Skill' },
+      teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      learner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       date: { type: String, default: '' },
-      time: { type: String, default: '' },
+      startTime: { type: String, default: '' },
+      endTime: { type: String, default: '' },
       meetingLink: { type: String, default: '' },
       notes: { type: String, default: '' },
+      status: {
+        type: String,
+        enum: ['pending', 'accepted', 'declined'],
+        default: 'pending',
+      },
+      session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
     },
     read: {
       type: Boolean,

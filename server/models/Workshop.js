@@ -76,6 +76,35 @@ const workshopSchema = new mongoose.Schema(
       index: true,
     },
     tags: [{ type: String, trim: true }],
+    questions: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        text: {
+          type: String,
+          required: true,
+          trim: true,
+          maxlength: [1000, 'Question cannot exceed 1000 characters'],
+        },
+        upvotes: [
+          {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+          },
+        ],
+        answered: {
+          type: Boolean,
+          default: false,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

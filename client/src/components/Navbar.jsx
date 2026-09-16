@@ -96,6 +96,7 @@ const Navbar = () => {
   const navLinks = [
     { name: 'Discover', path: '/discover', icon: Compass },
     { name: 'Matches', path: '/matches', icon: Sparkles },
+    { name: 'Community', path: '/community', icon: Flame },
     { name: 'Workshops', path: '/workshops', icon: Users },
     { name: 'Roadmaps', path: '/learn', icon: GraduationCap },
     { name: 'Messages', path: '/messages', icon: MessageSquare },
@@ -284,6 +285,14 @@ const Navbar = () => {
                         >
                           <User className="w-4 h-4" />
                           My Profile
+                        </Link>
+                        <Link
+                          to="/community"
+                          onClick={() => setProfileDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600"
+                        >
+                          <Flame className="w-4 h-4 text-amber-500" />
+                          Community Hub
                         </Link>
                         <Link
                           to="/learn"
