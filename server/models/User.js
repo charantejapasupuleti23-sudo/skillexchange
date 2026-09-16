@@ -217,6 +217,19 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    ratingBreakdown: {
+      communication: { type: Number, default: 5.0 },
+      technicalMastery: { type: Number, default: 5.0 },
+      punctuality: { type: Number, default: 5.0 },
+      helpfulness: { type: Number, default: 5.0 },
+    },
+    ratingDistribution: {
+      fiveStar: { type: Number, default: 0 },
+      fourStar: { type: Number, default: 0 },
+      threeStar: { type: Number, default: 0 },
+      twoStar: { type: Number, default: 0 },
+      oneStar: { type: Number, default: 0 },
+    },
     completedSessions: {
       type: Number,
       default: 0,

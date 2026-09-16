@@ -10,10 +10,18 @@ const { evaluateUserBadges } = require('../utils/gamification');
 // @access  Private
 exports.createReview = async (req, res, next) => {
   try {
-    const { sessionId, rating, comment, endorseSkill = true, tags = [] } = req.body;
+    const {
+      sessionId,
+      rating,
+      categoryRatings,
+      roleReviewed = 'mentor',
+      comment,
+      endorseSkill = true,
+      tags = [],
+    } = req.body;
 
-    if (!sessionId || !rating || !comment) {
-      return next(new ErrorResponse('Please provide sessionId, rating (1-5), and comment', 400));
+    if (!sessionId || !comment) {
+      return next(new ErrorResponse('Please provide sessionId and comment', 400));
     }
 
     const session = await Session.findById(sessionId).populate('skill', 'name');
@@ -27,12 +35,15 @@ exports.createReview = async (req, res, next) => {
     }
 
     // Reviewer must be the learner or teacher (primarily learner reviewing teacher)
-    if (session.learner.toString() !== req.user.id) {
-      return next(new ErrorResponse('Only the learner can submit a teacher review for this session', 403));
+    if (session.learner.toString() !== req.user.id && session.teacher.toString() !== req.user.id) {
+      return next(new ErrorResponse('You are not a participant of this session', 403));
     }
 
+    const isLearner = session.learner.toString() === req.user.id;
+    const targetUser = isLearner ? session.teacher : session.learner;
+
     // Cannot review oneself
-    if (session.teacher.toString() === req.user.id) {
+    if (targetUser.toString() === req.user.id) {
       return next(new ErrorResponse('You cannot review yourself', 400));
     }
 
@@ -42,12 +53,34 @@ exports.createReview = async (req, res, next) => {
       return next(new ErrorResponse('A review has already been submitted for this session', 400));
     }
 
+    // Calculate category ratings and overall composite rating
+    const parsedCategoryRatings = {
+      communication: Number(categoryRatings?.communication || rating || 5),
+      technicalMastery: Number(categoryRatings?.technicalMastery || rating || 5),
+      punctuality: Number(categoryRatings?.punctuality || rating || 5),
+      helpfulness: Number(categoryRatings?.helpfulness || rating || 5),
+    };
+
+    // Overall rating calculated from average of 4 pillars if not explicitly set
+    const calculatedOverall = rating
+      ? Number(rating)
+      : Math.round(
+          ((parsedCategoryRatings.communication +
+            parsedCategoryRatings.technicalMastery +
+            parsedCategoryRatings.punctuality +
+            parsedCategoryRatings.helpfulness) /
+            4) *
+            10
+        ) / 10;
+
     const review = await Review.create({
       session: sessionId,
       reviewer: req.user.id,
-      reviewedUser: session.teacher,
+      reviewedUser: targetUser,
       skill: session.skill._id,
-      rating: Number(rating),
+      roleReviewed: isLearner ? 'mentor' : 'learner',
+      rating: calculatedOverall,
+      categoryRatings: parsedCategoryRatings,
       comment: comment.trim(),
       endorsedSkill: !!endorseSkill,
       tags: Array.isArray(tags) ? tags : [],
@@ -86,14 +119,14 @@ exports.createReview = async (req, res, next) => {
       evaluateUserBadges(req.user.id),
     ]);
 
-    // Notify teacher
+    // Notify target user
     const io = req.app.get('io');
     await createNotification(io, {
-      recipient: session.teacher,
+      recipient: targetUser,
       sender: req.user.id,
       type: 'new_review',
       title: 'New Review & Skill Endorsement Received!',
-      message: `${req.user.name} left a ${rating}-star review and verified your ${session.skill.name} skill: "${comment.length > 50 ? comment.substring(0, 47) + '...' : comment}"`,
+      message: `${req.user.name} left a ${calculatedOverall}★ review and verified your ${session.skill.name} skill: "${comment.length > 50 ? comment.substring(0, 47) + '...' : comment}"`,
       referenceId: review._id,
       referenceType: 'Review',
     });

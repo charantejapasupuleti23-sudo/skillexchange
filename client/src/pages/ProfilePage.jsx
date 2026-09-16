@@ -355,54 +355,189 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Reviews Section */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span>Peer Reviews ({profileUser.reviews?.length || 0})</span>
-          </h2>
+      {/* Reviews & Ratings Section */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="space-y-0.5">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+              <span>Peer Ratings & Endorsements</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Multi-dimensional evaluation given by verified learning partners.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+            {profileUser.reviews?.length || profileUser.reviewCount || 0} Verified Reviews
+          </span>
         </div>
 
+        {/* Rating Breakdown Dashboard Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-indigo-50/20 to-purple-50/20 border border-slate-200/80">
+          {/* Big Score Card */}
+          <div className="flex flex-col items-center justify-center text-center p-4 bg-white rounded-2xl border border-slate-100 shadow-2xs space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Overall Rating</span>
+            <div className="text-4xl sm:text-5xl font-black text-slate-900 flex items-center gap-1.5">
+              <span>{(profileUser.rating || 5.0).toFixed(1)}</span>
+              <Star className="w-7 h-7 fill-amber-400 text-amber-400 inline" />
+            </div>
+            <div className="flex items-center gap-0.5 pt-1">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  className={`w-4 h-4 ${
+                    (profileUser.rating || 5.0) >= s
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-slate-200'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-[11px] text-slate-500 font-medium">
+              Based on {profileUser.reviews?.length || profileUser.reviewCount || 0} completed exchanges
+            </span>
+          </div>
+
+          {/* 4 Pillars Sub-Ratings */}
+          <div className="space-y-2.5 justify-center flex flex-col">
+            <span className="text-xs font-bold text-slate-700">Mentorship Pillars</span>
+
+            {[
+              {
+                label: '💬 Communication & Clarity',
+                val: profileUser.ratingBreakdown?.communication || profileUser.rating || 5.0,
+              },
+              {
+                label: '💡 Technical Mastery',
+                val: profileUser.ratingBreakdown?.technicalMastery || profileUser.rating || 5.0,
+              },
+              {
+                label: '⏱️ Punctuality & Prep',
+                val: profileUser.ratingBreakdown?.punctuality || profileUser.rating || 5.0,
+              },
+              {
+                label: '🤝 Patience & Helpfulness',
+                val: profileUser.ratingBreakdown?.helpfulness || profileUser.rating || 5.0,
+              },
+            ].map((pillar) => (
+              <div key={pillar.label} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 text-[11px]">{pillar.label}</span>
+                  <span className="font-bold text-slate-900 text-[11px]">{Number(pillar.val).toFixed(1)} / 5.0</span>
+                </div>
+                <div className="w-full bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${(Number(pillar.val) / 5) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Star Distribution */}
+          <div className="space-y-2 justify-center flex flex-col">
+            <span className="text-xs font-bold text-slate-700">Star Distribution</span>
+            {[
+              { stars: '5★', count: profileUser.ratingDistribution?.fiveStar ?? (profileUser.reviewCount || profileUser.reviews?.length || 1) },
+              { stars: '4★', count: profileUser.ratingDistribution?.fourStar ?? 0 },
+              { stars: '3★', count: profileUser.ratingDistribution?.threeStar ?? 0 },
+              { stars: '2★', count: profileUser.ratingDistribution?.twoStar ?? 0 },
+              { stars: '1★', count: profileUser.ratingDistribution?.oneStar ?? 0 },
+            ].map((row) => {
+              const total = (profileUser.reviews?.length || profileUser.reviewCount || 1);
+              const pct = total > 0 ? Math.round((row.count / total) * 100) : 0;
+              return (
+                <div key={row.stars} className="flex items-center gap-2 text-xs">
+                  <span className="w-6 font-bold text-slate-600 text-[11px]">{row.stars}</span>
+                  <div className="flex-1 bg-slate-200/80 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-[10px] text-slate-400 font-semibold">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Detailed Reviews Stream */}
         {profileUser.reviews && profileUser.reviews.length > 0 ? (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 space-y-4 pt-2">
             {profileUser.reviews.map((rev) => (
-              <div key={rev._id} className="py-4 space-y-2 first:pt-0 last:pb-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+              <div key={rev._id} className="pt-4 space-y-3 first:pt-0">
+                <div className="flex items-start justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-3">
                     <img
                       src={rev.reviewer?.profileImage?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'}
                       alt={rev.reviewer?.name}
-                      className="w-8 h-8 rounded-xl object-cover"
+                      className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200"
                     />
                     <div>
-                      <p className="font-semibold text-slate-900 text-xs">{rev.reviewer?.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-slate-900 text-xs">{rev.reviewer?.name}</p>
+                        {rev.endorsedSkill && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            Verified Endorsement
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-slate-400">
-                        {new Date(rev.createdAt).toLocaleDateString()}
+                        {new Date(rev.createdAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-3.5 h-3.5 ${
-                          rev.rating >= s ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                        }`}
-                      />
-                    ))}
+                  <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200/60">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span className="text-xs font-black text-amber-800">{(rev.rating || 5.0).toFixed(1)}</span>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-700 leading-relaxed italic">
+                {/* Sub-ratings pills if present */}
+                {rev.categoryRatings && (
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600 font-semibold bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <span>💬 Clarity: <strong className="text-slate-900">{rev.categoryRatings.communication || 5}★</strong></span>
+                    <span>•</span>
+                    <span>💡 Technical: <strong className="text-slate-900">{rev.categoryRatings.technicalMastery || 5}★</strong></span>
+                    <span>•</span>
+                    <span>⏱️ Punctuality: <strong className="text-slate-900">{rev.categoryRatings.punctuality || 5}★</strong></span>
+                    <span>•</span>
+                    <span>🤝 Patience: <strong className="text-slate-900">{rev.categoryRatings.helpfulness || 5}★</strong></span>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {rev.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rev.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100"
+                      >
+                        ✓ {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-700 leading-relaxed italic bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
                   "{rev.comment}"
                 </p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-slate-400 italic">No reviews received yet.</p>
+          <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
+            <p className="text-xs text-slate-400 italic">No reviews received yet. Complete a learning session to earn verified ratings!</p>
+          </div>
         )}
       </div>
 
