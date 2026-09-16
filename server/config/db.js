@@ -1,4 +1,12 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Configure reliable DNS servers for SRV/TXT record resolution on macOS/local networks
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  // Ignore if custom dns servers cannot be set
+}
 
 let memoryServer = null;
 
@@ -20,7 +28,7 @@ const connectDB = async () => {
     }
 
     const conn = await mongoose.connect(mongoUri);
-    console.log(`[Database] MongoDB Connected: ${conn.connection.host}`);
+    console.log(`[Database] MongoDB Connected: ${conn.connection.host} (Database: ${conn.connection.name})`);
     return conn;
   } catch (error) {
     console.error(`[Database Error] ${error.message}`);

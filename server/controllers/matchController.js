@@ -2,20 +2,33 @@ const User = require('../models/User');
 const { calculateMatchScore, findMatchesForUser } = require('../services/matchingService');
 const ErrorResponse = require('../utils/errorResponse');
 
-// @desc    Get top recommended matches for logged-in user
+// @desc    Get top recommended matches and 3-way barter loops for logged-in user
 // @route   GET /api/matches
 // @access  Private
 exports.getMatches = async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit, 10) || 12;
-    const minScore = parseInt(req.query.minScore, 10) || 15;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const minScore = req.query.minScore ? parseInt(req.query.minScore, 10) : 25;
+    const day = req.query.day || '';
+    const category = req.query.category || '';
+    const minRating = req.query.minRating ? parseFloat(req.query.minRating) : 0;
+    const matchTypeFilter = req.query.type || 'all';
 
-    const matches = await findMatchesForUser(req.user.id, { limit, minScore });
+    const result = await findMatchesForUser(req.user.id, {
+      limit,
+      minScore,
+      day,
+      category,
+      minRating,
+      matchTypeFilter,
+    });
 
     res.status(200).json({
       success: true,
-      count: matches.length,
-      data: matches,
+      count: result.matches.length,
+      data: result.matches,
+      threeWayLoops: result.threeWayLoops,
+      stats: result.stats,
     });
   } catch (error) {
     next(error);

@@ -18,6 +18,12 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
   const [meetingLink, setMeetingLink] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const generateMeetLink = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const part = (len) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `https://meet.google.com/${part(3)}-${part(4)}-${part(3)}`;
+  };
+
   React.useEffect(() => {
     if (isOpen) {
       // Set default minimum date (tomorrow)
@@ -32,7 +38,7 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
         setSkillId(peerUser.skillsToTeach[0].skill?._id || peerUser.skillsToTeach[0].skill);
       }
 
-      setMeetingLink(`https://meet.jit.si/skillloop-session-${Math.random().toString(36).substring(2, 10)}`);
+      setMeetingLink(generateMeetLink());
     }
   }, [isOpen, connection, peerUser]);
 
@@ -179,14 +185,31 @@ const ScheduleSessionModal = ({ isOpen, onClose, connection, peerUser, onSuccess
 
         {/* Meeting Link */}
         <div>
-          <label className="block font-semibold text-slate-700 mb-1">Video Meeting Link:</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <Video className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Google Meet Video Link:</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setMeetingLink(generateMeetLink())}
+              className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium hover:underline"
+            >
+              Generate New Link
+            </button>
+          </div>
           <input
             type="url"
             value={meetingLink}
             onChange={(e) => setMeetingLink(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+            placeholder="https://meet.google.com/xxx-yyyy-zzz"
+            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono"
             required
           />
+          <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            An email with this Google Meet link and session details will be sent automatically to both participants.
+          </p>
         </div>
 
         {/* Agenda / Notes */}

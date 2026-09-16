@@ -2,8 +2,12 @@ const Session = require('../models/Session');
 const Connection = require('../models/Connection');
 const User = require('../models/User');
 const Skill = require('../models/Skill');
+const Message = require('../models/Message');
 const ErrorResponse = require('../utils/errorResponse');
 const { createNotification } = require('../utils/notify');
+const { generateGoogleMeetLink } = require('../utils/meetingLink');
+const sendEmail = require('../utils/sendEmail');
+const { sessionScheduledEmail, sessionConfirmedEmail } = require('../utils/emailTemplates');
 
 // @desc    Schedule a new learning session
 // @route   POST /api/sessions
@@ -49,6 +53,12 @@ exports.createSession = async (req, res, next) => {
     // Determine other party for notification
     const otherUserId = req.user.id === teacherId ? learnerId : teacherId;
 
+    // Use provided meeting link or auto-generate a valid Google Meet link
+    const finalMeetingLink =
+      meetingLink && meetingLink.trim().length > 0
+        ? meetingLink.trim()
+        : generateGoogleMeetLink();
+
     const session = await Session.create({
       connection: connectionId,
       teacher: teacherId,
@@ -57,14 +67,14 @@ exports.createSession = async (req, res, next) => {
       date: sessionDate,
       startTime,
       endTime,
-      meetingLink: meetingLink || 'https://meet.skillloop.dev/session-' + Math.random().toString(36).substring(2, 9),
+      meetingLink: finalMeetingLink,
       notes: notes || '',
       status: 'Pending',
     });
 
     const populatedSession = await Session.findById(session._id)
-      .populate('teacher', 'name username profileImage rating')
-      .populate('learner', 'name username profileImage rating')
+      .populate('teacher', 'name username email profileImage rating')
+      .populate('learner', 'name username email profileImage rating')
       .populate('skill', 'name category icon');
 
     // Notify the other party
@@ -78,6 +88,111 @@ exports.createSession = async (req, res, next) => {
       referenceId: session._id,
       referenceType: 'Session',
     });
+
+    // Send email invitations with Google Meet link to both participants
+    try {
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const formattedDate = new Date(date).toLocaleDateString(undefined, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      const teacher = populatedSession.teacher;
+      const learner = populatedSession.learner;
+      const skillName = populatedSession.skill.name;
+
+      // Email to other party (recipient)
+      const recipientUser = req.user.id === teacher._id.toString() ? learner : teacher;
+      if (recipientUser?.email) {
+        const recipientHtml = sessionScheduledEmail({
+          recipientName: recipientUser.name,
+          otherPartyName: req.user.name,
+          skillName,
+          teacherName: teacher.name,
+          learnerName: learner.name,
+          date: formattedDate,
+          startTime,
+          endTime,
+          meetingLink: finalMeetingLink,
+          notes: session.notes,
+          clientUrl,
+        });
+
+        await sendEmail({
+          email: recipientUser.email,
+          subject: `SkillLoop Session Scheduled: ${skillName} (Google Meet Link)`,
+          message: `A new learning session for ${skillName} has been scheduled on ${formattedDate} at ${startTime}. Join Google Meet: ${finalMeetingLink}`,
+          html: recipientHtml,
+        });
+      }
+
+      // Confirmation email to initiator if email available
+      if (req.user?.email && req.user.email !== recipientUser?.email) {
+        const initiatorHtml = sessionScheduledEmail({
+          recipientName: req.user.name,
+          otherPartyName: recipientUser.name,
+          skillName,
+          teacherName: teacher.name,
+          learnerName: learner.name,
+          date: formattedDate,
+          startTime,
+          endTime,
+          meetingLink: finalMeetingLink,
+          notes: session.notes,
+          clientUrl,
+        });
+
+        await sendEmail({
+          email: req.user.email,
+          subject: `Session Scheduled Confirmation: ${skillName} with ${recipientUser.name}`,
+          message: `Your learning session for ${skillName} is scheduled for ${formattedDate} at ${startTime}. Google Meet Link: ${finalMeetingLink}`,
+          html: initiatorHtml,
+        });
+      }
+    } catch (emailErr) {
+      console.error('[Email Error in createSession]', emailErr.message);
+    }
+
+    // Send auto chat message to connection so learner & teacher get the Google Meet link in their chat session
+    if (connectionId) {
+      try {
+        const formattedDateStr = new Date(date).toLocaleDateString(undefined, {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+
+        const chatMessageText = `📹 **Google Meet Learning Session Scheduled**\n\n• **Skill**: ${populatedSession.skill.name}\n• **Date**: ${formattedDateStr}\n• **Time**: ${startTime} - ${endTime}\n• **Google Meet Link**: ${finalMeetingLink}${notes ? `\n• **Agenda**: ${notes}` : ''}`;
+
+        const chatMsg = await Message.create({
+          conversation: connectionId,
+          sender: req.user.id,
+          receiver: otherUserId,
+          text: chatMessageText,
+        });
+
+        await Connection.findByIdAndUpdate(connectionId, {
+          lastActivityAt: new Date(),
+        });
+
+        if (io) {
+          const populatedMsg = await Message.findById(chatMsg._id)
+            .populate('sender', 'name username profileImage')
+            .populate('receiver', 'name username profileImage');
+
+          io.to(`conv_${connectionId}`).emit('new_message', populatedMsg);
+          io.to(`user_${otherUserId}`).emit('message_notification', {
+            conversationId: connectionId,
+            message: populatedMsg,
+          });
+        }
+      } catch (chatErr) {
+        console.error('[Chat Message Error in createSession]', chatErr.message);
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -164,8 +279,8 @@ exports.getSessionById = async (req, res, next) => {
 exports.acceptSession = async (req, res, next) => {
   try {
     const session = await Session.findById(req.params.id)
-      .populate('teacher', 'name')
-      .populate('learner', 'name')
+      .populate('teacher', 'name username email')
+      .populate('learner', 'name username email')
       .populate('skill', 'name');
 
     if (!session) {
@@ -180,6 +295,14 @@ exports.acceptSession = async (req, res, next) => {
       return next(new ErrorResponse('Not authorized to accept this session', 403));
     }
 
+    if (session.status === 'Confirmed') {
+      return res.status(200).json({
+        success: true,
+        message: 'Session is already confirmed',
+        data: session,
+      });
+    }
+
     if (session.status !== 'Pending') {
       return next(new ErrorResponse(`Cannot accept session with status "${session.status}"`, 400));
     }
@@ -187,14 +310,14 @@ exports.acceptSession = async (req, res, next) => {
     session.status = 'Confirmed';
     await session.save();
 
-    const otherUserId =
+    const otherUser =
       session.teacher._id.toString() === req.user.id
-        ? session.learner._id
-        : session.teacher._id;
+        ? session.learner
+        : session.teacher;
 
     const io = req.app.get('io');
     await createNotification(io, {
-      recipient: otherUserId,
+      recipient: otherUser._id,
       sender: req.user.id,
       type: 'session_confirmed',
       title: 'Session Confirmed!',
@@ -202,6 +325,73 @@ exports.acceptSession = async (req, res, next) => {
       referenceId: session._id,
       referenceType: 'Session',
     });
+
+    // Send confirmation email with Google Meet link to both participants
+    try {
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const formattedDate = new Date(session.date).toLocaleDateString(undefined, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      const sendConfirm = async (recipient, otherParty) => {
+        if (!recipient?.email) return;
+        const html = sessionConfirmedEmail({
+          recipientName: recipient.name,
+          otherPartyName: otherParty.name,
+          skillName: session.skill.name,
+          date: formattedDate,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          meetingLink: session.meetingLink,
+          clientUrl,
+        });
+
+        await sendEmail({
+          email: recipient.email,
+          subject: `Confirmed: ${session.skill.name} Learning Session (Google Meet Link)`,
+          message: `Your session for ${session.skill.name} with ${otherParty.name} on ${formattedDate} at ${session.startTime} is confirmed. Join Google Meet: ${session.meetingLink}`,
+          html,
+        });
+      };
+
+      await Promise.all([
+        sendConfirm(session.teacher, session.learner),
+        sendConfirm(session.learner, session.teacher),
+      ]);
+    } catch (emailErr) {
+      console.error('[Email Error in acceptSession]', emailErr.message);
+    }
+
+    // Send auto chat message to connection confirming session with Google Meet link
+    if (session.connection) {
+      try {
+        const chatMessageText = `✅ **Session Confirmed!**\n\n• **Skill**: ${session.skill.name}\n• **Google Meet Link**: ${session.meetingLink}`;
+
+        const chatMsg = await Message.create({
+          conversation: session.connection,
+          sender: req.user.id,
+          receiver: otherUser._id,
+          text: chatMessageText,
+        });
+
+        await Connection.findByIdAndUpdate(session.connection, {
+          lastActivityAt: new Date(),
+        });
+
+        if (io) {
+          const populatedMsg = await Message.findById(chatMsg._id)
+            .populate('sender', 'name username profileImage')
+            .populate('receiver', 'name username profileImage');
+
+          io.to(`conv_${session.connection}`).emit('new_message', populatedMsg);
+        }
+      } catch (chatErr) {
+        console.error('[Chat Message Error in acceptSession]', chatErr.message);
+      }
+    }
 
     res.status(200).json({
       success: true,

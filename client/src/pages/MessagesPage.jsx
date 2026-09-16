@@ -25,6 +25,8 @@ import {
   User,
   PanelRightClose,
   PanelRightOpen,
+  Video,
+  ExternalLink,
 } from 'lucide-react';
 
 const MessagesPage = () => {
@@ -223,6 +225,55 @@ const MessagesPage = () => {
 
   const peer = selectedConnection?.peer;
 
+  const renderMessageText = (text, isMe) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    const googleMeetMatch = text.match(/(https:\/\/meet\.google\.com\/[a-z0-9-]+)/i);
+
+    return (
+      <div className="space-y-2">
+        <p className="whitespace-pre-wrap break-words">
+          {parts.map((part, i) => {
+            if (part.match(urlRegex)) {
+              return (
+                <a
+                  key={i}
+                  href={part}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`underline font-semibold ${
+                    isMe ? 'text-indigo-100 hover:text-white' : 'text-indigo-600 hover:text-indigo-800'
+                  }`}
+                >
+                  {part}
+                </a>
+              );
+            }
+            return part;
+          })}
+        </p>
+        {googleMeetMatch && (
+          <div className="pt-1">
+            <a
+              href={googleMeetMatch[0]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs transition-colors shadow-xs ${
+                isMe
+                  ? 'bg-white text-indigo-700 hover:bg-indigo-50'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Join Google Meet</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden h-[82vh] flex flex-col md:flex-row">
       {/* Sidebar: Conversation List */}
@@ -377,7 +428,7 @@ const MessagesPage = () => {
                           : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs shadow-xs'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                      {renderMessageText(msg.text, isMe)}
                       <div
                         className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
                           isMe ? 'text-indigo-200' : 'text-slate-400'

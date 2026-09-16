@@ -317,17 +317,17 @@ const SessionsPage = () => {
                   </div>
 
                   <div className="flex items-center gap-2.5 text-slate-700">
-                    <Video className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <Video className="w-4 h-4 text-emerald-600 shrink-0" />
                     <div className="min-w-0">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Video Meeting Room</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Google Meet Room</span>
                       {session.meetingLink ? (
                         <a
                           href={session.meetingLink}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-semibold text-indigo-600 hover:text-indigo-800 underline truncate inline-flex items-center gap-1"
+                          className="font-semibold text-emerald-600 hover:text-emerald-800 underline truncate inline-flex items-center gap-1.5"
                         >
-                          <span>Launch Video Call</span>
+                          <span>Join Google Meet</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       ) : (

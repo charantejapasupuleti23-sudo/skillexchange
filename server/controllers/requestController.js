@@ -4,6 +4,8 @@ const User = require('../models/User');
 const Skill = require('../models/Skill');
 const ErrorResponse = require('../utils/errorResponse');
 const { createNotification } = require('../utils/notify');
+const sendEmail = require('../utils/sendEmail');
+const { exchangeRequestEmail, exchangeAcceptedEmail } = require('../utils/emailTemplates');
 
 // @desc    Create and send a skill exchange request
 // @route   POST /api/requests
@@ -69,6 +71,30 @@ exports.createRequest = async (req, res, next) => {
       referenceType: 'ExchangeRequest',
     });
 
+    // Send email to recipient if email exists
+    if (receiver.email) {
+      try {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const html = exchangeRequestEmail({
+          senderName: req.user.name,
+          receiverName: receiver.name,
+          teachSkill: teachSkill.name,
+          learnSkill: learnSkill.name,
+          message: request.message,
+          clientUrl,
+        });
+
+        await sendEmail({
+          email: receiver.email,
+          subject: `SkillLoop: New Skill Exchange Request from ${req.user.name}`,
+          message: `${req.user.name} wants to connect and exchange skills on SkillLoop (Teach: ${teachSkill.name}, Learn: ${learnSkill.name}).`,
+          html,
+        });
+      } catch (emailErr) {
+        console.error('[Email Error in createRequest]', emailErr.message);
+      }
+    }
+
     const populatedRequest = await ExchangeRequest.findById(request._id)
       .populate('sender', 'name username profileImage rating')
       .populate('receiver', 'name username profileImage rating')
@@ -133,7 +159,7 @@ exports.getSentRequests = async (req, res, next) => {
 exports.acceptRequest = async (req, res, next) => {
   try {
     const request = await ExchangeRequest.findById(req.params.id)
-      .populate('sender', 'name username')
+      .populate('sender', 'name username email')
       .populate('teachSkill', 'name')
       .populate('learnSkill', 'name');
 
@@ -190,6 +216,29 @@ exports.acceptRequest = async (req, res, next) => {
       referenceId: connection._id,
       referenceType: 'Connection',
     });
+
+    // Send email to sender informing them of connection
+    if (request.sender?.email) {
+      try {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const html = exchangeAcceptedEmail({
+          senderName: request.sender.name,
+          accepterName: req.user.name,
+          teachSkill: request.teachSkill.name,
+          learnSkill: request.learnSkill.name,
+          clientUrl,
+        });
+
+        await sendEmail({
+          email: request.sender.email,
+          subject: `SkillLoop: ${req.user.name} accepted your Skill Exchange request!`,
+          message: `Great news! ${req.user.name} accepted your skill exchange request for ${request.teachSkill.name} & ${request.learnSkill.name}. You are now connected!`,
+          html,
+        });
+      } catch (emailErr) {
+        console.error('[Email Error in acceptRequest]', emailErr.message);
+      }
+    }
 
     res.status(200).json({
       success: true,
