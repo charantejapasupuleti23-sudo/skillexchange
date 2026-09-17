@@ -1,44 +1,78 @@
+const mongoose = require('mongoose');
 const Message = require('../models/Message');
 const Connection = require('../models/Connection');
 const ErrorResponse = require('../utils/errorResponse');
 const { createNotification } = require('../utils/notify');
 
-// @desc    Get message history for a connection
-// @route   GET /api/messages/:connectionId
+// @desc    Get message history for a connection or recipient user
+// @route   GET /api/messages/:recipientId or GET /api/messages/:connectionId
 // @access  Private
 exports.getMessages = async (req, res, next) => {
   try {
     const { connectionId } = req.params;
+    const recipientId = connectionId;
+    const currentUserId = req.user.id || req.user._id;
 
-    const connection = await Connection.findById(connectionId);
-    if (!connection) {
-      return next(new ErrorResponse('Connection not found', 404));
+    let connection = null;
+    if (mongoose.Types.ObjectId.isValid(connectionId)) {
+      connection = await Connection.findById(connectionId);
     }
 
-    const isMember = connection.users.some(
-      (u) => u.toString() === req.user.id
-    );
-    if (!isMember) {
-      return next(new ErrorResponse('Not authorized to access messages for this connection', 403));
-    }
+    let messages = [];
 
-    // Mark unread messages sent to req.user as read
-    await Message.updateMany(
-      {
-        conversation: connectionId,
-        receiver: req.user.id,
-        read: false,
-      },
-      {
-        read: true,
-        readAt: new Date(),
+    if (connection) {
+      const isMember = connection.users.some(
+        (u) => (u._id ? u._id.toString() : u.toString()) === currentUserId.toString()
+      );
+      if (!isMember) {
+        return next(new ErrorResponse('Not authorized to access messages for this connection', 403));
       }
-    );
 
-    const messages = await Message.find({ conversation: connectionId })
-      .populate('sender', 'name username profileImage')
-      .populate('receiver', 'name username profileImage')
-      .sort({ createdAt: 1 });
+      // Mark unread messages sent to req.user as read
+      await Message.updateMany(
+        {
+          conversation: connection._id,
+          $or: [{ receiver: currentUserId }, { receiverId: currentUserId }],
+          read: false,
+        },
+        {
+          read: true,
+          readAt: new Date(),
+        }
+      );
+
+      messages = await Message.find({ conversation: connection._id })
+        .populate('sender', 'name username profileImage')
+        .populate('receiver', 'name username profileImage')
+        .sort({ createdAt: 1 });
+    } else {
+      // Query only messages exchanged between these two specific users
+      messages = await Message.find({
+        $or: [
+          { sender: currentUserId, receiver: recipientId },
+          { sender: recipientId, receiver: currentUserId },
+          { senderId: currentUserId, receiverId: recipientId },
+          { senderId: recipientId, receiverId: currentUserId },
+        ],
+      })
+        .populate('sender', 'name username profileImage')
+        .populate('receiver', 'name username profileImage')
+        .sort({ createdAt: 1 });
+
+      await Message.updateMany(
+        {
+          $or: [
+            { sender: recipientId, receiver: currentUserId },
+            { senderId: recipientId, receiverId: currentUserId },
+          ],
+          read: false,
+        },
+        {
+          read: true,
+          readAt: new Date(),
+        }
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -55,82 +89,120 @@ exports.getMessages = async (req, res, next) => {
 // @access  Private
 exports.sendMessage = async (req, res, next) => {
   try {
-    const {
+    let {
       connectionId,
       receiverId,
       text,
+      content,
       messageType = 'text',
+      type,
       codeSnippet,
       fileAttachment,
       sessionProposal,
     } = req.body;
 
-    if (!connectionId || !receiverId) {
-      return next(new ErrorResponse('Please provide connectionId and receiverId', 400));
+    const currentUserId = req.user.id || req.user._id;
+    const msgText = (text || content || '').toString();
+    const msgType = type || messageType || 'text';
+
+    if (!receiverId && connectionId && mongoose.Types.ObjectId.isValid(connectionId)) {
+      const conn = await Connection.findById(connectionId);
+      if (conn) {
+        const otherUser = conn.users.find(
+          (u) => (u._id ? u._id.toString() : u.toString()) !== currentUserId.toString()
+        );
+        if (otherUser) {
+          receiverId = otherUser._id ? otherUser._id.toString() : otherUser.toString();
+        }
+      }
     }
 
-    if (!text && !codeSnippet?.code && !fileAttachment?.url && !sessionProposal?.skillName) {
+    if (!receiverId && !connectionId) {
+      return next(new ErrorResponse('Please provide connectionId or receiverId', 400));
+    }
+
+    if (!msgText && !codeSnippet?.code && !fileAttachment?.url && !sessionProposal?.skillName) {
       return next(new ErrorResponse('Message cannot be completely empty', 400));
     }
 
-    const connection = await Connection.findById(connectionId);
-    if (!connection) {
-      return next(new ErrorResponse('Connection not found', 404));
-    }
-
-    const isMember = connection.users.some(
-      (u) => u.toString() === req.user.id
-    );
-    if (!isMember) {
-      return next(new ErrorResponse('Not authorized to send messages in this connection', 403));
+    let connection = null;
+    if (connectionId && mongoose.Types.ObjectId.isValid(connectionId)) {
+      connection = await Connection.findById(connectionId);
+      if (connection) {
+        const isMember = connection.users.some(
+          (u) => (u._id ? u._id.toString() : u.toString()) === currentUserId.toString()
+        );
+        if (!isMember) {
+          return next(new ErrorResponse('Not authorized to send messages in this connection', 403));
+        }
+      }
     }
 
     const message = await Message.create({
-      conversation: connectionId,
-      sender: req.user.id,
+      conversation: connection ? connection._id : (connectionId || undefined),
+      sender: currentUserId,
       receiver: receiverId,
-      text: text?.trim() || '',
-      messageType,
+      senderId: currentUserId,
+      receiverId: receiverId,
+      text: msgText.trim(),
+      content: msgText.trim(),
+      messageType: msgType,
+      type: msgType,
       codeSnippet: codeSnippet || undefined,
       fileAttachment: fileAttachment || undefined,
       sessionProposal: sessionProposal || undefined,
     });
 
     // Update connection activity
-    await Connection.findByIdAndUpdate(connectionId, {
-      lastActivityAt: new Date(),
-    });
+    if (connectionId && mongoose.Types.ObjectId.isValid(connectionId)) {
+      await Connection.findByIdAndUpdate(connectionId, {
+        lastActivityAt: new Date(),
+      });
+    }
 
     const populatedMessage = await Message.findById(message._id)
       .populate('sender', 'name username profileImage')
       .populate('receiver', 'name username profileImage');
 
-    // Socket real-time broadcast
-    const io = req.app.get('io');
+    // Socket real-time broadcast - scoped ONLY to participants and conversation room, NOT global
+    const io = req.app?.get ? req.app.get('io') : null;
+    const convId = connectionId || populatedMessage.conversation?._id || populatedMessage.conversation;
     if (io) {
-      io.to(`conv_${connectionId}`).emit('new_message', populatedMessage);
-      io.to(`user_${receiverId}`).emit('message_notification', {
-        conversationId: connectionId,
-        message: populatedMessage,
-      });
+      if (convId) {
+        io.to(`conv_${convId}`).emit('new_message', populatedMessage);
+      }
+      if (receiverId) {
+        const rIdStr = receiverId.toString();
+        io.to(rIdStr).to(`user_${rIdStr}`).emit('receive_message', populatedMessage);
+        io.to(rIdStr).to(`user_${rIdStr}`).emit('new_message', populatedMessage);
+        io.to(rIdStr).to(`user_${rIdStr}`).emit('message_notification', {
+          conversationId: convId,
+          message: populatedMessage,
+        });
+      }
+      const sIdStr = currentUserId.toString();
+      io.to(sIdStr).to(`user_${sIdStr}`).emit('receive_message', populatedMessage);
+      io.to(sIdStr).to(`user_${sIdStr}`).emit('new_message', populatedMessage);
     }
 
     // Determine notification preview text
-    let previewText = text;
-    if (messageType === 'code') previewText = 'Shared a code snippet';
-    else if (messageType === 'file') previewText = `Shared a file: ${fileAttachment?.name || 'Attachment'}`;
-    else if (messageType === 'session_proposal') previewText = `Proposed a session: ${sessionProposal?.skillName || 'Practice'}`;
+    let previewText = msgText;
+    if (msgType === 'code') previewText = 'Shared a code snippet';
+    else if (msgType === 'file') previewText = `Shared a file: ${fileAttachment?.name || 'Attachment'}`;
+    else if (msgType === 'session_proposal') previewText = `Proposed a session: ${sessionProposal?.skillName || 'Practice'}`;
 
     // Send in-app notification to receiver
-    await createNotification(io, {
-      recipient: receiverId,
-      sender: req.user.id,
-      type: 'new_message',
-      title: 'New Message',
-      message: `${req.user.name}: "${previewText?.length > 50 ? previewText.substring(0, 47) + '...' : previewText}"`,
-      referenceId: connectionId,
-      referenceType: 'Connection',
-    });
+    if (receiverId) {
+      await createNotification(io, {
+        recipient: receiverId,
+        sender: currentUserId,
+        type: 'new_message',
+        title: 'New Message',
+        message: `${req.user.name}: "${previewText?.length > 50 ? previewText.substring(0, 47) + '...' : previewText}"`,
+        referenceId: connectionId || message._id,
+        referenceType: connectionId ? 'Connection' : 'Message',
+      });
+    }
 
     res.status(201).json({
       success: true,

@@ -26,12 +26,26 @@ const initializeSocketIO = (io) => {
   });
 
   io.on('connection', (socket) => {
+    // Join a unique user room upon authentication/connection
+    const initialUserId =
+      socket.userId ||
+      socket.handshake.query?.userId ||
+      socket.handshake.auth?.userId;
+
+    if (initialUserId) {
+      const uidStr = initialUserId.toString();
+      socket.userId = uidStr;
+      socket.join(uidStr);
+      socket.join(`user_${uidStr}`);
+    }
+
     // 1. User Registration & Online Presence
     socket.on('register_user', (userId) => {
-      const uid = userId || socket.userId;
+      const uid = (userId || socket.userId || '').toString();
       if (!uid) return;
 
       socket.userId = uid;
+      socket.join(uid);
       socket.join(`user_${uid}`);
 
       if (!activeUsers.has(uid)) {
@@ -54,68 +68,164 @@ const initializeSocketIO = (io) => {
 
     // 3. Join Conversation Room
     socket.on('join_conversation', (conversationId) => {
-      socket.join(`conv_${conversationId}`);
+      if (conversationId) {
+        socket.join(`conv_${conversationId}`);
+      }
     });
 
     // 4. Leave Conversation Room
     socket.on('leave_conversation', (conversationId) => {
-      socket.leave(`conv_${conversationId}`);
+      if (conversationId) {
+        socket.leave(`conv_${conversationId}`);
+      }
     });
 
     // 5. Typing Indicators
     socket.on('typing_start', ({ conversationId, peerId }) => {
-      socket.to(`conv_${conversationId}`).emit('peer_typing', {
-        conversationId,
-        userId: socket.userId,
-        isTyping: true,
-      });
+      if (conversationId) {
+        socket.to(`conv_${conversationId}`).emit('peer_typing', {
+          conversationId,
+          userId: socket.userId,
+          isTyping: true,
+        });
+      }
+      if (peerId) {
+        socket.to(peerId.toString()).to(`user_${peerId}`).emit('peer_typing', {
+          conversationId,
+          userId: socket.userId,
+          isTyping: true,
+        });
+      }
     });
 
     socket.on('typing_stop', ({ conversationId, peerId }) => {
-      socket.to(`conv_${conversationId}`).emit('peer_typing', {
-        conversationId,
-        userId: socket.userId,
-        isTyping: false,
-      });
+      if (conversationId) {
+        socket.to(`conv_${conversationId}`).emit('peer_typing', {
+          conversationId,
+          userId: socket.userId,
+          isTyping: false,
+        });
+      }
+      if (peerId) {
+        socket.to(peerId.toString()).to(`user_${peerId}`).emit('peer_typing', {
+          conversationId,
+          userId: socket.userId,
+          isTyping: false,
+        });
+      }
     });
 
-    // 6. Direct Message Broadcast
-    socket.on('send_direct_message', async (messageData) => {
-      const { conversationId, receiverId, text } = messageData;
-      if (!socket.userId || !receiverId || !text) return;
+    // 6. Send Message handler (room-scoped, targeted to receiver and sender)
+    socket.on('send_message', async (data) => {
+      const senderId = (socket.userId || data.senderId || data.sender || '').toString();
+      const receiverId = (data.receiverId || data.receiver || '').toString();
+      const content = data.content || data.text || '';
+      const type = data.type || data.messageType || 'text';
+      const conversationId = data.conversationId || data.conversation;
+
+      if (!senderId || !receiverId || (!content && !data.codeSnippet && !data.fileAttachment && !data.sessionProposal)) {
+        return;
+      }
 
       try {
         // Save to DB
-        const newMessage = await Message.create({
-          conversation: conversationId,
-          sender: socket.userId,
+        const newMsg = await Message.create({
+          conversation: conversationId || undefined,
+          sender: senderId,
           receiver: receiverId,
-          text,
+          senderId,
+          receiverId,
+          text: content,
+          content,
+          messageType: type,
+          type,
+          codeSnippet: data.codeSnippet,
+          fileAttachment: data.fileAttachment,
+          sessionProposal: data.sessionProposal,
         });
 
-        await Connection.findByIdAndUpdate(conversationId, {
-          lastActivityAt: new Date(),
-        });
+        if (conversationId) {
+          await Connection.findByIdAndUpdate(conversationId, {
+            lastActivityAt: new Date(),
+          });
+        }
 
-        const populated = await Message.findById(newMessage._id).populate(
-          'sender',
-          'name username profileImage'
-        );
+        const populated = await Message.findById(newMsg._id)
+          .populate('sender', 'name username profileImage')
+          .populate('receiver', 'name username profileImage');
 
-        // Broadcast to conversation room
-        io.to(`conv_${conversationId}`).emit('new_message', populated);
+        // Emit ONLY to receiver and sender rooms, NOT globally to everyone
+        io.to(receiverId).to(`user_${receiverId}`).emit('receive_message', populated);
+        io.to(senderId).to(`user_${senderId}`).emit('receive_message', populated);
 
-        // Also notify receiver's personal room
-        io.to(`user_${receiverId}`).emit('message_notification', {
+        io.to(receiverId).to(`user_${receiverId}`).emit('new_message', populated);
+        io.to(senderId).to(`user_${senderId}`).emit('new_message', populated);
+
+        if (conversationId) {
+          io.to(`conv_${conversationId}`).emit('new_message', populated);
+        }
+
+        io.to(receiverId).to(`user_${receiverId}`).emit('message_notification', {
           conversationId,
           message: populated,
         });
       } catch (err) {
-        console.error('[Socket Message Error]', err);
+        console.error('[Socket send_message error]', err);
       }
     });
 
-    // 7. Disconnection
+    // 7. Direct Message Broadcast
+    socket.on('send_direct_message', async (messageData) => {
+      const senderId = (socket.userId || messageData.senderId || messageData.sender || '').toString();
+      const receiverId = (messageData.receiverId || messageData.receiver || '').toString();
+      const text = messageData.text || messageData.content;
+      const conversationId = messageData.conversationId || messageData.conversation;
+
+      if (!senderId || !receiverId || !text) return;
+
+      try {
+        // Save to DB
+        const newMessage = await Message.create({
+          conversation: conversationId || undefined,
+          sender: senderId,
+          receiver: receiverId,
+          senderId,
+          receiverId,
+          text,
+          content: text,
+        });
+
+        if (conversationId) {
+          await Connection.findByIdAndUpdate(conversationId, {
+            lastActivityAt: new Date(),
+          });
+        }
+
+        const populated = await Message.findById(newMessage._id)
+          .populate('sender', 'name username profileImage')
+          .populate('receiver', 'name username profileImage');
+
+        // Scoped emits only to participants
+        io.to(receiverId).to(`user_${receiverId}`).emit('receive_message', populated);
+        io.to(senderId).to(`user_${senderId}`).emit('receive_message', populated);
+
+        io.to(receiverId).to(`user_${receiverId}`).emit('new_message', populated);
+        io.to(senderId).to(`user_${senderId}`).emit('new_message', populated);
+
+        if (conversationId) {
+          io.to(`conv_${conversationId}`).emit('new_message', populated);
+        }
+
+        io.to(receiverId).to(`user_${receiverId}`).emit('message_notification', {
+          conversationId,
+          message: populated,
+        });
+      } catch (err) {
+        console.error('[Socket Direct Message Error]', err);
+      }
+    });
+
+    // 8. Disconnection
     socket.on('disconnect', () => {
       if (socket.userId && activeUsers.has(socket.userId)) {
         const userSocketSet = activeUsers.get(socket.userId);

@@ -959,7 +959,7 @@ const CommunityPage = () => {
                       ? 'bg-indigo-600 text-white border-indigo-600'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
-                  title="Attach Code Snippet"
+                  title="Send CodeSnippet"
                 >
                   <Code className="w-4 h-4" />
                 </button>

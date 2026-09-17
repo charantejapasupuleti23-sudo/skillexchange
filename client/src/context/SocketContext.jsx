@@ -30,7 +30,8 @@ export const SocketProvider = ({ children }) => {
     const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
     const newSocket = io(socketUrl, {
-      auth: { token },
+      auth: { token, userId: user._id },
+      query: { userId: user._id },
       withCredentials: true,
       transports: ['websocket', 'polling'],
     });

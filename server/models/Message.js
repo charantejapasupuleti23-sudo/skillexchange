@@ -5,19 +5,26 @@ const messageSchema = new mongoose.Schema(
     conversation: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Connection',
-      required: [true, 'Conversation reference is required'],
       index: true,
     },
     sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Sender is required'],
       index: true,
     },
     receiver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Receiver is required'],
+      index: true,
+    },
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    receiverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       index: true,
     },
     text: {
@@ -26,9 +33,19 @@ const messageSchema = new mongoose.Schema(
       trim: true,
       maxlength: [5000, 'Message cannot exceed 5000 characters'],
     },
+    content: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [5000, 'Message cannot exceed 5000 characters'],
+    },
     messageType: {
       type: String,
       enum: ['text', 'code', 'file', 'session_proposal'],
+      default: 'text',
+    },
+    type: {
+      type: String,
       default: 'text',
     },
     codeSnippet: {
@@ -73,6 +90,21 @@ const messageSchema = new mongoose.Schema(
   }
 );
 
+messageSchema.pre('save', function (next) {
+  if (!this.sender && this.senderId) this.sender = this.senderId;
+  if (!this.senderId && this.sender) this.senderId = this.sender;
+  if (!this.receiver && this.receiverId) this.receiver = this.receiverId;
+  if (!this.receiverId && this.receiver) this.receiverId = this.receiver;
+  if (!this.text && this.content) this.text = this.content;
+  if (!this.content && this.text) this.content = this.text;
+  if (!this.type && this.messageType) this.type = this.messageType;
+  if (!this.messageType && this.type) this.messageType = this.type;
+  next();
+});
+
 messageSchema.index({ conversation: 1, createdAt: 1 });
+messageSchema.index({ sender: 1, receiver: 1, createdAt: 1 });
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
+
