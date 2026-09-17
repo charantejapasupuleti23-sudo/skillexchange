@@ -35,7 +35,8 @@ const connectionSchema = new mongoose.Schema(
   }
 );
 
-// Ensure index on users array for fast lookups
-connectionSchema.index({ users: 1 });
+// Ensure indexes for fast connection listings and lookups
+connectionSchema.index({ users: 1, lastActivityAt: -1 });
+connectionSchema.index({ users: 1, status: 1 });
 
 module.exports = mongoose.model('Connection', connectionSchema);

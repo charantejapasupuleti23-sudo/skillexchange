@@ -20,7 +20,8 @@ exports.getConnections = async (req, res, next) => {
         ],
       })
       .populate('sharedSkills', 'name category icon')
-      .sort({ lastActivityAt: -1 });
+      .sort({ lastActivityAt: -1 })
+      .lean();
 
     // Attach peer user and last message preview for each connection
     const formattedConnections = (
@@ -34,7 +35,8 @@ exports.getConnections = async (req, res, next) => {
 
           const lastMessage = await Message.findOne({ conversation: conn._id })
             .sort({ createdAt: -1 })
-            .select('text sender createdAt read');
+            .select('text sender createdAt read')
+            .lean();
 
           return {
             _id: conn._id,

@@ -155,15 +155,11 @@ const initializeSocketIO = (io) => {
           .populate('receiver', 'name username profileImage');
 
         // Emit ONLY to receiver and sender rooms, NOT globally to everyone
-        io.to(receiverId).to(`user_${receiverId}`).emit('receive_message', populated);
-        io.to(senderId).to(`user_${senderId}`).emit('receive_message', populated);
-
-        io.to(receiverId).to(`user_${receiverId}`).emit('new_message', populated);
-        io.to(senderId).to(`user_${senderId}`).emit('new_message', populated);
-
+        let target = io.to(receiverId).to(`user_${receiverId}`).to(senderId).to(`user_${senderId}`);
         if (conversationId) {
-          io.to(`conv_${conversationId}`).emit('new_message', populated);
+          target = target.to(`conv_${conversationId}`);
         }
+        target.emit('receive_message', populated);
 
         io.to(receiverId).to(`user_${receiverId}`).emit('message_notification', {
           conversationId,
@@ -206,15 +202,11 @@ const initializeSocketIO = (io) => {
           .populate('receiver', 'name username profileImage');
 
         // Scoped emits only to participants
-        io.to(receiverId).to(`user_${receiverId}`).emit('receive_message', populated);
-        io.to(senderId).to(`user_${senderId}`).emit('receive_message', populated);
-
-        io.to(receiverId).to(`user_${receiverId}`).emit('new_message', populated);
-        io.to(senderId).to(`user_${senderId}`).emit('new_message', populated);
-
+        let target = io.to(receiverId).to(`user_${receiverId}`).to(senderId).to(`user_${senderId}`);
         if (conversationId) {
-          io.to(`conv_${conversationId}`).emit('new_message', populated);
+          target = target.to(`conv_${conversationId}`);
         }
+        target.emit('receive_message', populated);
 
         io.to(receiverId).to(`user_${receiverId}`).emit('message_notification', {
           conversationId,

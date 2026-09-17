@@ -34,8 +34,11 @@ export const AuthProvider = ({ children }) => {
         if (res.data.token) {
           localStorage.setItem('skillloop_token', res.data.token);
         }
-        setUser(res.data.user);
-        return { success: true, user: res.data.user };
+        // Re-fetch fully-populated user from /auth/me
+        const meRes = await api.get('/auth/me');
+        const populatedUser = meRes.data?.success ? meRes.data.data : res.data.user;
+        setUser(populatedUser);
+        return { success: true, user: populatedUser };
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed. Please verify credentials.';
@@ -52,8 +55,11 @@ export const AuthProvider = ({ children }) => {
         if (res.data.token) {
           localStorage.setItem('skillloop_token', res.data.token);
         }
-        setUser(res.data.user);
-        return { success: true, user: res.data.user };
+        // Re-fetch fully-populated user from /auth/me
+        const meRes = await api.get('/auth/me');
+        const populatedUser = meRes.data?.success ? meRes.data.data : res.data.user;
+        setUser(populatedUser);
+        return { success: true, user: populatedUser };
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Registration failed. Please try again.';

@@ -9,12 +9,20 @@
     "seed": "node utils/seedData.js",
     "test": "jest --runInBand --detectOpenHandles"
   },
-  "keywords": ["mern", "p2p", "skill-exchange", "socket.io", "express", "mongodb"],
+  "keywords": [
+    "mern",
+    "p2p",
+    "skill-exchange",
+    "socket.io",
+    "express",
+    "mongodb"
+  ],
   "author": "SkillLoop Team",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.2.0",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

@@ -341,23 +341,31 @@ const CommunityPage = () => {
   // Socket listener for channels
   useEffect(() => {
     if (!socket) return;
-    const handleNewChannelMessage = ({ channelSlug, message }) => {
-      if (channelSlug === activeChannelSlug) {
+    const handleNewChannelMessage = (data) => {
+      const msg = data?.message || data;
+      const slug = data?.channelSlug || activeChannelSlug;
+      if (slug === activeChannelSlug && msg) {
+        const msgId = (msg._id || msg.id)?.toString();
         setChannelMessages((prev) => {
-          if (prev.some((m) => m._id === message._id)) return prev;
-          return [...prev, message];
+          if (msgId && prev.some((m) => (m._id || m.id)?.toString() === msgId)) return prev;
+          return [...prev, msg];
         });
       }
     };
+
+    const eventName = `channel_${activeChannelSlug}_new_message`;
     socket.on('channel_message_received', handleNewChannelMessage);
+    socket.on(eventName, handleNewChannelMessage);
+
     return () => {
       socket.off('channel_message_received', handleNewChannelMessage);
+      socket.off(eventName, handleNewChannelMessage);
     };
   }, [socket, activeChannelSlug]);
 
   const handleSendChannelMessage = async (e) => {
     e.preventDefault();
-    if (!channelInput.trim() && !channelSnippetCode.trim()) return;
+    if ((!channelInput.trim() && !channelSnippetCode.trim()) || channelSending) return;
 
     try {
       setChannelSending(true);
@@ -368,8 +376,12 @@ const CommunityPage = () => {
           : undefined,
       };
       const res = await api.post(`/channels/${activeChannelSlug}/messages`, payload);
-      if (res.data.success) {
-        setChannelMessages((prev) => [...prev, res.data.data]);
+      if (res.data.success && res.data.data) {
+        const newMsgId = (res.data.data._id || res.data.data.id)?.toString();
+        setChannelMessages((prev) => {
+          if (newMsgId && prev.some((m) => (m._id || m.id)?.toString() === newMsgId)) return prev;
+          return [...prev, res.data.data];
+        });
         setChannelInput('');
         setChannelSnippetCode('');
         setShowCodeSnippetInput(false);

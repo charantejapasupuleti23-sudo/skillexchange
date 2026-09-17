@@ -150,6 +150,17 @@ const MessagesPage = () => {
 
   const peer = selectedConnection?.peer;
 
+  // Safely extract skill name from a skill item — handles both
+  // populated objects ({ name: 'React' }) and raw ObjectId strings.
+  const getSkillName = (skillField) => {
+    if (!skillField) return null;
+    if (typeof skillField === 'string') {
+      // Raw ObjectId — we don't have the name, hide rather than show the ID
+      return null;
+    }
+    return skillField?.name || null;
+  };
+
   if (loadingConnections) {
     return (
       <div className="py-20 flex flex-col items-center justify-center">
@@ -333,16 +344,22 @@ const MessagesPage = () => {
               </span>
               <div className="flex flex-wrap gap-1">
                 {peer?.skillsToTeach && peer.skillsToTeach.length > 0 ? (
-                  peer.skillsToTeach.slice(0, 3).map((item, idx) => (
-                    <SkillBadge
-                      key={idx}
-                      skill={item.skill}
-                      level={item.level}
-                      variant="teach"
-                      size="sm"
-                    />
-                  ))
+                  peer.skillsToTeach
+                    .filter((item) => getSkillName(item.skill))
+                    .slice(0, 4)
+                    .map((item, idx) => (
+                      <SkillBadge
+                        key={idx}
+                        skill={item.skill}
+                        level={item.level}
+                        variant="teach"
+                        size="sm"
+                      />
+                    ))
                 ) : (
+                  <span className="text-slate-400 italic">None listed</span>
+                )}
+                {peer?.skillsToTeach?.filter((item) => getSkillName(item.skill)).length === 0 && (
                   <span className="text-slate-400 italic">None listed</span>
                 )}
               </div>
@@ -354,16 +371,22 @@ const MessagesPage = () => {
               </span>
               <div className="flex flex-wrap gap-1">
                 {user?.skillsToTeach && user.skillsToTeach.length > 0 ? (
-                  user.skillsToTeach.slice(0, 3).map((item, idx) => (
-                    <SkillBadge
-                      key={idx}
-                      skill={item.skill}
-                      level={item.level}
-                      variant="learn"
-                      size="sm"
-                    />
-                  ))
+                  user.skillsToTeach
+                    .filter((item) => getSkillName(item.skill))
+                    .slice(0, 4)
+                    .map((item, idx) => (
+                      <SkillBadge
+                        key={idx}
+                        skill={item.skill}
+                        level={item.level}
+                        variant="learn"
+                        size="sm"
+                      />
+                    ))
                 ) : (
+                  <span className="text-slate-400 italic">None listed</span>
+                )}
+                {user?.skillsToTeach?.filter((item) => getSkillName(item.skill)).length === 0 && (
                   <span className="text-slate-400 italic">None listed</span>
                 )}
               </div>

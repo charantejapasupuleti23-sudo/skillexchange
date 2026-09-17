@@ -1,33 +1,34 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ToastProvider } from './context/ToastContext';
 
-// Layout
+// Layout & Core
 import RootLayout from './layouts/RootLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import PageLoader from './components/PageLoader';
 
-// Public Pages
+// Eager load initial public landing
 import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import DiscoverPage from './pages/DiscoverPage';
-import AboutPage from './pages/AboutPage';
-import ProfilePage from './pages/ProfilePage';
 
-// Protected Pages
-import DashboardPage from './pages/DashboardPage';
-import EditProfilePage from './pages/EditProfilePage';
-import MatchesPage from './pages/MatchesPage';
-import RequestsPage from './pages/RequestsPage';
-import MessagesPage from './pages/MessagesPage';
-import SessionsPage from './pages/SessionsPage';
-import LearnPage from './pages/LearnPage';
-import WorkshopsPage from './pages/WorkshopsPage';
-import CommunityPage from './pages/CommunityPage';
+// Lazy load secondary & protected routes
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const DiscoverPage = lazy(() => import('./pages/DiscoverPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const EditProfilePage = lazy(() => import('./pages/EditProfilePage'));
+const MatchesPage = lazy(() => import('./pages/MatchesPage'));
+const RequestsPage = lazy(() => import('./pages/RequestsPage'));
+const MessagesPage = lazy(() => import('./pages/MessagesPage'));
+const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+const LearnPage = lazy(() => import('./pages/LearnPage'));
+const WorkshopsPage = lazy(() => import('./pages/WorkshopsPage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 
 function App() {
   return (
@@ -35,7 +36,8 @@ function App() {
       <AuthProvider>
         <SocketProvider>
           <ToastProvider>
-            <Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
               {/* Main App Layout */}
               <Route path="/" element={<RootLayout />}>
                 {/* Public Routes */}
@@ -134,6 +136,7 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
+            </Suspense>
           </ToastProvider>
         </SocketProvider>
       </AuthProvider>

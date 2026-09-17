@@ -40,6 +40,11 @@ export default function ChatWindow({
   const [newMessageText, setNewMessageText] = useState('');
   const [isPeerTyping, setIsPeerTyping] = useState(false);
 
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [sendingFile, setSendingFile] = useState(false);
+  const [sendingProposal, setSendingProposal] = useState(false);
+
   // Modals inside chat window
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [codeToShare, setCodeToShare] = useState('');
@@ -69,6 +74,8 @@ export default function ChatWindow({
   const connectionId = selectedConnection?._id;
   const peerId = peer?._id || peer?.id;
   const currentUserId = currentUser?._id || currentUser?.id;
+
+  const getMsgId = (m) => (m?._id || m?.id)?.toString();
 
   // 1. Fetch messages immediately when active contact / connection changes
   useEffect(() => {
@@ -114,10 +121,10 @@ export default function ChatWindow({
       socket.emit('join_conversation', connectionId);
     }
 
-    // Polling fallback to keep messages synced
+    // Background polling fallback to keep messages in sync
     const pollInterval = setInterval(() => {
       fetchMessages(true);
-    }, 5000);
+    }, 30000);
 
     return () => {
       clearInterval(pollInterval);
@@ -127,11 +134,12 @@ export default function ChatWindow({
     };
   }, [connectionId, peerId, socket]);
 
-  // 2. Socket listeners with proper cleanup to prevent duplicate messages
+  // 2. Socket listeners with proper cleanup and deduplication
   useEffect(() => {
     if (!socket) return;
 
     const handleIncomingMessage = (newMsg) => {
+      if (!newMsg) return;
       const msgConvId = typeof newMsg.conversation === 'object' ? newMsg.conversation?._id : newMsg.conversation;
       const msgSenderId = (newMsg.sender?._id || newMsg.sender || newMsg.senderId || '').toString();
       const msgReceiverId = (newMsg.receiver?._id || newMsg.receiver || newMsg.receiverId || '').toString();
@@ -146,7 +154,10 @@ export default function ChatWindow({
 
       if (isCurrentChat) {
         setMessages((prev) => {
-          if (prev.some((m) => m._id === newMsg._id)) return prev;
+          const incomingId = getMsgId(newMsg);
+          if (incomingId && prev.some((m) => getMsgId(m) === incomingId)) {
+            return prev;
+          }
           return [...prev, newMsg];
         });
       }
@@ -157,8 +168,10 @@ export default function ChatWindow({
     };
 
     const handleMessageUpdated = (updatedMsg) => {
+      if (!updatedMsg) return;
+      const updatedId = getMsgId(updatedMsg);
       setMessages((prev) =>
-        prev.map((m) => (m._id === updatedMsg._id ? updatedMsg : m))
+        prev.map((m) => (getMsgId(m) === updatedId ? updatedMsg : m))
       );
     };
 
@@ -172,13 +185,11 @@ export default function ChatWindow({
     };
 
     socket.on('receive_message', handleIncomingMessage);
-    socket.on('new_message', handleIncomingMessage);
     socket.on('message_updated', handleMessageUpdated);
     socket.on('peer_typing', handlePeerTyping);
 
     return () => {
       socket.off('receive_message', handleIncomingMessage);
-      socket.off('new_message', handleIncomingMessage);
       socket.off('message_updated', handleMessageUpdated);
       socket.off('peer_typing', handlePeerTyping);
     };
@@ -212,10 +223,11 @@ export default function ChatWindow({
   // 5. Send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessageText.trim()) return;
+    if (!newMessageText.trim() || sendingMessage) return;
 
     const text = newMessageText.trim();
     setNewMessageText('');
+    setSendingMessage(true);
 
     if (socket) {
       socket.emit('typing_stop', {
@@ -233,20 +245,24 @@ export default function ChatWindow({
 
       if (res.data.success && res.data.data) {
         setMessages((prev) => {
-          if (prev.some((m) => m._id === res.data.data._id)) return prev;
+          const newId = getMsgId(res.data.data);
+          if (newId && prev.some((m) => getMsgId(m) === newId)) return prev;
           return [...prev, res.data.data];
         });
       }
     } catch (err) {
       addToast('Failed to send message', 'error');
+    } finally {
+      setSendingMessage(false);
     }
   };
 
   // 6. Send Code Snippet
   const handleSendCode = async (e) => {
     e.preventDefault();
-    if (!codeToShare.trim()) return;
+    if (!codeToShare.trim() || sendingCode) return;
 
+    setSendingCode(true);
     try {
       const res = await api.post('/messages', {
         connectionId,
@@ -261,13 +277,19 @@ export default function ChatWindow({
       });
 
       if (res.data.success && res.data.data) {
-        setMessages((prev) => [...prev, res.data.data]);
+        setMessages((prev) => {
+          const newId = getMsgId(res.data.data);
+          if (newId && prev.some((m) => getMsgId(m) === newId)) return prev;
+          return [...prev, res.data.data];
+        });
         setCodeToShare('');
         setIsCodeModalOpen(false);
         addToast('Code snippet sent!', 'success');
       }
     } catch (err) {
       addToast('Failed to send code snippet', 'error');
+    } finally {
+      setSendingCode(false);
     }
   };
 
@@ -310,8 +332,9 @@ export default function ChatWindow({
 
   const handleSendFile = async (e) => {
     e.preventDefault();
-    if (!fileUrl) return;
+    if (!fileUrl || sendingFile) return;
 
+    setSendingFile(true);
     try {
       const isImg = fileMimeType.startsWith('image/') || fileUrl.startsWith('data:image/');
       const res = await api.post('/messages', {
@@ -329,27 +352,34 @@ export default function ChatWindow({
       });
 
       if (res.data.success && res.data.data) {
-        setMessages((prev) => [...prev, res.data.data]);
+        setMessages((prev) => {
+          const newId = getMsgId(res.data.data);
+          if (newId && prev.some((m) => getMsgId(m) === newId)) return prev;
+          return [...prev, res.data.data];
+        });
         handleClearFile();
         setIsFileModalOpen(false);
         addToast('File attached successfully!', 'success');
       }
     } catch (err) {
       addToast('Failed to send file attachment', 'error');
+    } finally {
+      setSendingFile(false);
     }
   };
 
   // 8. Session Proposal Submission
   const handleSendProposal = async (e) => {
     e.preventDefault();
-    if (!proposalTopic || !proposalDate || !proposalStartTime) {
-      addToast('Please complete all required fields', 'error');
+    if (!proposalTopic || !proposalDate || !proposalStartTime || sendingProposal) {
+      if (!sendingProposal) addToast('Please complete all required fields', 'error');
       return;
     }
 
     const teacherId = proposalRole === 'peerTeaches' ? peerId : currentUserId;
     const learnerId = proposalRole === 'peerTeaches' ? currentUserId : peerId;
 
+    setSendingProposal(true);
     try {
       const res = await api.post('/messages', {
         connectionId,
@@ -370,13 +400,19 @@ export default function ChatWindow({
       });
 
       if (res.data.success && res.data.data) {
-        setMessages((prev) => [...prev, res.data.data]);
+        setMessages((prev) => {
+          const newId = getMsgId(res.data.data);
+          if (newId && prev.some((m) => getMsgId(m) === newId)) return prev;
+          return [...prev, res.data.data];
+        });
         setIsProposalModalOpen(false);
         setProposalNotes('');
         addToast('Session proposal sent directly in chat!', 'success');
       }
     } catch (err) {
       addToast(err.response?.data?.message || 'Failed to send proposal', 'error');
+    } finally {
+      setSendingProposal(false);
     }
   };
 
@@ -846,10 +882,14 @@ export default function ChatWindow({
         />
         <button
           type="submit"
-          disabled={!newMessageText.trim()}
+          disabled={!newMessageText.trim() || sendingMessage}
           className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white transition-colors shadow-xs"
         >
-          <Send className="w-4 h-4" />
+          {sendingMessage ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
         </button>
       </form>
 

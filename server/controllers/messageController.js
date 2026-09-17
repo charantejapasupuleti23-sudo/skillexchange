@@ -44,7 +44,8 @@ exports.getMessages = async (req, res, next) => {
       messages = await Message.find({ conversation: connection._id })
         .populate('sender', 'name username profileImage')
         .populate('receiver', 'name username profileImage')
-        .sort({ createdAt: 1 });
+        .sort({ createdAt: 1 })
+        .lean();
     } else {
       // Query only messages exchanged between these two specific users
       messages = await Message.find({
@@ -57,7 +58,8 @@ exports.getMessages = async (req, res, next) => {
       })
         .populate('sender', 'name username profileImage')
         .populate('receiver', 'name username profileImage')
-        .sort({ createdAt: 1 });
+        .sort({ createdAt: 1 })
+        .lean();
 
       await Message.updateMany(
         {
@@ -168,21 +170,26 @@ exports.sendMessage = async (req, res, next) => {
     const io = req.app?.get ? req.app.get('io') : null;
     const convId = connectionId || populatedMessage.conversation?._id || populatedMessage.conversation;
     if (io) {
+      let emitTarget = io;
       if (convId) {
-        io.to(`conv_${convId}`).emit('new_message', populatedMessage);
+        emitTarget = emitTarget.to(`conv_${convId}`);
       }
       if (receiverId) {
         const rIdStr = receiverId.toString();
-        io.to(rIdStr).to(`user_${rIdStr}`).emit('receive_message', populatedMessage);
-        io.to(rIdStr).to(`user_${rIdStr}`).emit('new_message', populatedMessage);
+        emitTarget = emitTarget.to(rIdStr).to(`user_${rIdStr}`);
+      }
+      const sIdStr = currentUserId.toString();
+      emitTarget = emitTarget.to(sIdStr).to(`user_${sIdStr}`);
+
+      emitTarget.emit('receive_message', populatedMessage);
+
+      if (receiverId) {
+        const rIdStr = receiverId.toString();
         io.to(rIdStr).to(`user_${rIdStr}`).emit('message_notification', {
           conversationId: convId,
           message: populatedMessage,
         });
       }
-      const sIdStr = currentUserId.toString();
-      io.to(sIdStr).to(`user_${sIdStr}`).emit('receive_message', populatedMessage);
-      io.to(sIdStr).to(`user_${sIdStr}`).emit('new_message', populatedMessage);
     }
 
     // Determine notification preview text

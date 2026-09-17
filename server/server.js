@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const { Server } = require('socket.io');
 
 // Load env vars
@@ -42,6 +43,9 @@ const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
 const app = express();
 const server = http.createServer(app);
+
+// HTTP Response Compression (Gzip / Deflate)
+app.use(compression());
 
 // Initialize Socket.io
 const io = new Server(server, {
